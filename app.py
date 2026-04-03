@@ -21,12 +21,12 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 # En-tête
 # ---------------------------------------------------------------------------
-col_logo, col_title = st.columns([1, 8])
+col_logo, col_title = st.columns([1, 10])
 with col_logo:
     try:
-        st.image("logo.svg", width=64)
+        st.image("logo.svg", width=80)
     except Exception:
-        st.write("📬")
+        pass
 with col_title:
     st.title("NormAdress")
     st.caption("Mise en conformité de fichiers d'adresses pour publipostage Word")
@@ -34,218 +34,304 @@ with col_title:
 st.divider()
 
 # ---------------------------------------------------------------------------
-# Étape 1 — Upload
+# ÉTAPE 1 — Import du fichier
 # ---------------------------------------------------------------------------
-st.header("1. Importer le fichier")
+st.subheader("Étape 1 — Importer le fichier")
+
 uploaded = st.file_uploader(
-    "Sélectionnez un fichier Excel ou CSV",
+    "Glissez un fichier Excel ou CSV",
     type=["xlsx", "xls", "csv"],
-    help="Formats supportés : .xlsx, .xls, .csv (séparateur détecté automatiquement)",
+    label_visibility="collapsed",
 )
 
 if not uploaded:
-    st.info("Importez un fichier pour commencer.")
+    st.info("Importez un fichier Excel (.xlsx / .xls) ou CSV pour commencer.")
     st.stop()
 
-# Chargement
 try:
     file_data = load_file(uploaded)
 except Exception as e:
-    st.error(f"Erreur lors du chargement du fichier : {e}")
+    st.error(f"Impossible de lire le fichier : {e}")
     st.stop()
 
-# Sélection de la feuille si multi-feuilles Excel
+# Sélection feuille
 if len(file_data["sheets"]) > 1:
     sheet_name = st.selectbox(
-        "Le fichier contient plusieurs feuilles — choisissez celle à traiter :",
+        "Ce fichier contient plusieurs feuilles — laquelle traiter ?",
         file_data["sheets"],
     )
 else:
     sheet_name = file_data["sheets"][0]
 
 source_df = file_data["dataframes"][sheet_name].copy()
-
 nb_importees = len(source_df)
-if nb_importees > 50_000:
-    st.warning(
-        f"⚠️ Le fichier contient {nb_importees:,} lignes. "
-        "Les performances peuvent être dégradées au-delà de 50 000 lignes."
-    )
 
-st.success(f"Fichier chargé : **{nb_importees}** lignes, **{len(source_df.columns)}** colonnes.")
+c1, c2 = st.columns(2)
+c1.success(f"**{nb_importees}** lignes importées — **{len(source_df.columns)}** colonnes détectées")
+if nb_importees > 50_000:
+    c2.warning("Fichier volumineux (>50 000 lignes) — le traitement peut être lent.")
+
+with st.expander("Aperçu des premières lignes du fichier source"):
+    st.dataframe(source_df.head(5), use_container_width=True)
 
 st.divider()
 
 # ---------------------------------------------------------------------------
-# Étape 2 — Mapping des colonnes
+# ÉTAPE 2 — Correspondance des colonnes
 # ---------------------------------------------------------------------------
-st.header("2. Correspondance des colonnes")
-st.write("Associez chaque colonne source à un champ standard (détection automatique pré-remplie) :")
+st.subheader("Étape 2 — Associer les colonnes aux champs de publipostage")
 
 initial_mapping = auto_map(list(source_df.columns))
-options_list = ["(ignorer)"] + STANDARD_FIELDS
+nb_auto = sum(1 for v in initial_mapping.values() if v)
+nb_total = len(source_df.columns)
+
+if nb_auto == nb_total:
+    st.success(f"Toutes les colonnes ont été reconnues automatiquement ({nb_auto}/{nb_total}).")
+elif nb_auto > 0:
+    st.info(
+        f"**{nb_auto}/{nb_total}** colonnes reconnues automatiquement. "
+        "Vérifiez et complétez les colonnes non reconnues ci-dessous."
+    )
+else:
+    st.warning(
+        "Aucune colonne n'a été reconnue automatiquement. "
+        "Associez manuellement chaque colonne à son champ de publipostage."
+    )
+
+st.caption(
+    "**Champ cible** = nom du champ de fusion dans vos courriers Word. "
+    "Choisissez **— Ne pas importer —** pour ignorer une colonne."
+)
+
+# Récupérer un exemple de valeur pour chaque colonne
+def sample_value(col):
+    vals = source_df[col].dropna()
+    vals = vals[vals.astype(str).str.strip() != ""]
+    return str(vals.iloc[0]) if len(vals) > 0 else "—"
+
+options_list = ["— Ne pas importer —"] + STANDARD_FIELDS
+
+FIELD_LABELS = {
+    "Civilite":   "Civilite  — M. / Mme / Mlle",
+    "Nom":        "Nom  — en MAJUSCULES",
+    "Prenom":     "Prenom  — en Titre",
+    "Societe":    "Societe  — raison sociale",
+    "Adresse1":   "Adresse1  — ligne principale",
+    "Adresse2":   "Adresse2  — complément",
+    "Adresse3":   "Adresse3  — bâtiment / résidence",
+    "CodePostal": "CodePostal  — 5 chiffres",
+    "Ville":      "Ville  — en MAJUSCULES",
+}
+labeled_options = ["— Ne pas importer —"] + [FIELD_LABELS[f] for f in STANDARD_FIELDS]
+field_from_label = {"— Ne pas importer —": ""} | {FIELD_LABELS[f]: f for f in STANDARD_FIELDS}
 
 mapping = {}
-cols_ui = st.columns(3)
-for i, src_col in enumerate(source_df.columns):
-    with cols_ui[i % 3]:
-        default_field = initial_mapping.get(src_col, "")
-        default_idx = options_list.index(default_field) if default_field in options_list else 0
-        chosen = st.selectbox(
-            f"`{src_col}`",
-            options_list,
+
+# Séparation reconnues / non reconnues
+auto_cols = [c for c in source_df.columns if initial_mapping.get(c)]
+manual_cols = [c for c in source_df.columns if not initial_mapping.get(c)]
+
+def render_mapping_row(src_col, default_field, key_prefix):
+    col_a, col_b, col_c = st.columns([3, 1, 3])
+    with col_a:
+        if default_field:
+            st.markdown(f"**`{src_col}`**  ✅")
+        else:
+            st.markdown(f"**`{src_col}`**  ❓")
+        st.caption(f"ex : *{sample_value(src_col)}*")
+    with col_b:
+        st.markdown("<div style='text-align:center;padding-top:18px;font-size:20px'>→</div>", unsafe_allow_html=True)
+    with col_c:
+        default_label = FIELD_LABELS.get(default_field, "— Ne pas importer —")
+        default_idx = labeled_options.index(default_label) if default_label in labeled_options else 0
+        chosen_label = st.selectbox(
+            "Champ cible",
+            labeled_options,
             index=default_idx,
-            key=f"map_{src_col}",
+            key=f"{key_prefix}_{src_col}",
+            label_visibility="collapsed",
         )
-        if chosen != "(ignorer)":
-            mapping[src_col] = chosen
+        return field_from_label[chosen_label]
+
+if auto_cols:
+    with st.expander(f"Colonnes reconnues automatiquement ({len(auto_cols)})", expanded=True):
+        for src_col in auto_cols:
+            chosen = render_mapping_row(src_col, initial_mapping[src_col], "map")
+            if chosen:
+                mapping[src_col] = chosen
+            st.markdown("---")
+
+if manual_cols:
+    with st.expander(
+        f"Colonnes non reconnues — à associer manuellement ({len(manual_cols)})",
+        expanded=True,
+    ):
+        st.caption("Ces colonnes n'ont pas été identifiées automatiquement. Associez-les au bon champ ou laissez **— Ne pas importer —** pour les ignorer.")
+        for src_col in manual_cols:
+            chosen = render_mapping_row(src_col, "", "map")
+            if chosen:
+                mapping[src_col] = chosen
+            st.markdown("---")
+
+# Vérification : au moins un champ mappé
+if not mapping:
+    st.warning("Aucune colonne associée — associez au moins un champ pour continuer.")
+    st.stop()
 
 st.divider()
 
 # ---------------------------------------------------------------------------
-# Étape 3 — Détection multi-contacts
+# ÉTAPE 3 — Multi-contacts (si détecté)
 # ---------------------------------------------------------------------------
 multi_contacts = detect_multi_contacts(mapping)
 explode = False
 if multi_contacts:
     fields_str = ", ".join(
-        f"{field} ({len(cols)} colonnes)" for field, cols in multi_contacts.items()
+        f"**{field}** ({len(cols)} colonnes)" for field, cols in multi_contacts.items()
     )
+    st.subheader("Étape 3 — Fichier multi-contacts détecté")
     st.warning(
-        f"⚠️ **Multi-contacts détectés** : {fields_str}. "
-        "Plusieurs colonnes sont associées au même champ — chaque ligne sera éclatée en contacts séparés."
+        f"Plusieurs colonnes sont associées au même champ : {fields_str}. "
+        "Cela signifie que chaque ligne contient plusieurs contacts (ex : Nom1 / Nom2). "
+        "Cochez la case ci-dessous pour créer une ligne par contact."
     )
-    explode = st.checkbox(
-        "Confirmer l'éclatement multi-contacts (une ligne par contact)",
-        value=False,
-    )
+    explode = st.checkbox("Éclater en une ligne par contact", value=False)
     st.divider()
 
 # ---------------------------------------------------------------------------
-# Étape 4 — Options de nettoyage
+# ÉTAPE 4 — Options de nettoyage
 # ---------------------------------------------------------------------------
-st.header("3. Options de nettoyage")
-col1, col2, col3 = st.columns(3)
-with col1:
-    opt_espaces = st.checkbox("Nettoyer les espaces et caractères spéciaux", value=True)
-    opt_civilite = st.checkbox("Normaliser les civilités", value=True)
-    opt_nom = st.checkbox("Mettre le Nom en MAJUSCULES", value=True)
-with col2:
-    opt_prenom = st.checkbox("Mettre le Prénom en Titre", value=True)
-    opt_codepostal = st.checkbox("Corriger les codes postaux", value=True)
-    opt_ville = st.checkbox("Mettre la Ville en MAJUSCULES", value=True)
-with col3:
-    opt_consolidation = st.checkbox("Consolider les lignes d'adresse", value=True)
-    opt_supprimer_vides = st.checkbox("Supprimer les lignes vides", value=True)
+st.subheader("Étape 3 — Options de nettoyage" if not multi_contacts else "Étape 4 — Options de nettoyage")
+
+with st.expander("Règles appliquées (toutes activées par défaut)", expanded=False):
+    col1, col2 = st.columns(2)
+    with col1:
+        opt_espaces    = st.checkbox("Supprimer les espaces et caractères invisibles", value=True)
+        opt_civilite   = st.checkbox("Normaliser les civilités (M. / Mme / Mlle)", value=True)
+        opt_nom        = st.checkbox("Mettre le Nom en MAJUSCULES", value=True)
+        opt_prenom     = st.checkbox("Mettre le Prénom en Titre (Jean-Pierre)", value=True)
+    with col2:
+        opt_codepostal      = st.checkbox("Corriger les codes postaux (ex: 1000 → 01000)", value=True)
+        opt_ville           = st.checkbox("Mettre la Ville en MAJUSCULES", value=True)
+        opt_consolidation   = st.checkbox("Consolider les lignes d'adresse (Adresse1 toujours remplie en premier)", value=True)
+        opt_supprimer_vides = st.checkbox("Supprimer les lignes entièrement vides", value=True)
 
 options = {
-    "espaces": opt_espaces,
-    "civilite": opt_civilite,
-    "nom": opt_nom,
-    "prenom": opt_prenom,
+    "espaces":    opt_espaces,
+    "civilite":   opt_civilite,
+    "nom":        opt_nom,
+    "prenom":     opt_prenom,
     "codepostal": opt_codepostal,
-    "ville": opt_ville,
+    "ville":      opt_ville,
 }
 
 st.divider()
 
 # ---------------------------------------------------------------------------
-# Étape 5 — Traitement
+# ÉTAPE 5 — Lancement
 # ---------------------------------------------------------------------------
-st.header("4. Traitement")
+st.subheader("Étape 4 — Lancer la mise en conformité" if not multi_contacts else "Étape 5 — Lancer la mise en conformité")
 
-if st.button("▶ Mettre en conformité", type="primary", use_container_width=True):
+champs_mappes = list(set(mapping.values()))
+st.markdown(
+    "**Récapitulatif :** "
+    f"{len(mapping)} colonne(s) associée(s) → champs : {', '.join(f'`{c}`' for c in champs_mappes)}"
+)
+
+run = st.button("Mettre en conformité", type="primary", use_container_width=True)
+
+if run:
     with st.spinner("Traitement en cours…"):
         try:
-            # 1. Construire le DataFrame mappé
+            # Construire le DataFrame mappé
             mapped_rows = []
             for _, row in source_df.iterrows():
                 new_row = {f: "" for f in STANDARD_FIELDS}
                 for src_col, field in mapping.items():
-                    if field in STANDARD_FIELDS:
-                        existing = new_row.get(field, "")
-                        val = str(row.get(src_col, ""))
-                        # En cas de multi-contacts non confirmé, on prend la première valeur
-                        if not existing:
-                            new_row[field] = val
+                    if field in STANDARD_FIELDS and not new_row[field]:
+                        new_row[field] = str(row.get(src_col, ""))
                 mapped_rows.append(new_row)
 
             mapped_df = pd.DataFrame(mapped_rows, columns=STANDARD_FIELDS)
             original_mapped = mapped_df.copy()
 
-            # 2. Éclatement multi-contacts
             if explode and multi_contacts:
                 from cleaner.consolidator import explode_multi_contacts
                 mapped_df = explode_multi_contacts(mapped_df, multi_contacts, source_df)
                 original_mapped = mapped_df.copy()
 
-            # 3. Règles de nettoyage
             mapped_df, rapport_lignes = apply_rules(mapped_df, options)
 
-            # 4. Consolidation adresses
             consolidation_journal = []
             if opt_consolidation:
                 mapped_df, consolidation_journal = consolidate_addresses(mapped_df)
 
-            # 5. Suppression lignes vides
             nb_supprimees = 0
             if opt_supprimer_vides:
                 mapped_df, nb_supprimees = remove_empty_rows(mapped_df)
                 original_mapped = original_mapped.reindex(mapped_df.index)
 
-            # 6. Détection doublons
             doublons = detect_duplicates(mapped_df)
-
             nb_exportees = len(mapped_df)
 
-            # Stocker en session
-            st.session_state["result_df"] = mapped_df
-            st.session_state["original_mapped"] = original_mapped
-            st.session_state["rapport_lignes"] = rapport_lignes
-            st.session_state["doublons"] = doublons
-            st.session_state["consolidation_journal"] = consolidation_journal
-            st.session_state["nb_importees"] = nb_importees
-            st.session_state["nb_exportees"] = nb_exportees
-            st.session_state["nb_supprimees"] = nb_supprimees
-            st.session_state["processed"] = True
+            st.session_state.update({
+                "result_df": mapped_df,
+                "original_mapped": original_mapped,
+                "rapport_lignes": rapport_lignes,
+                "doublons": doublons,
+                "consolidation_journal": consolidation_journal,
+                "nb_importees": nb_importees,
+                "nb_exportees": nb_exportees,
+                "nb_supprimees": nb_supprimees,
+                "processed": True,
+            })
 
         except Exception as e:
             st.error(f"Erreur pendant le traitement : {e}")
             raise
 
 # ---------------------------------------------------------------------------
-# Résultats
+# RÉSULTATS
 # ---------------------------------------------------------------------------
 if st.session_state.get("processed"):
-    result_df = st.session_state["result_df"]
-    original_mapped = st.session_state["original_mapped"]
-    rapport_lignes = st.session_state["rapport_lignes"]
-    doublons = st.session_state["doublons"]
+    result_df          = st.session_state["result_df"]
+    original_mapped    = st.session_state["original_mapped"]
+    rapport_lignes     = st.session_state["rapport_lignes"]
+    doublons           = st.session_state["doublons"]
     consolidation_journal = st.session_state["consolidation_journal"]
-    nb_importees_s = st.session_state["nb_importees"]
-    nb_exportees_s = st.session_state["nb_exportees"]
-    nb_supprimees_s = st.session_state["nb_supprimees"]
+    nb_imp  = st.session_state["nb_importees"]
+    nb_exp  = st.session_state["nb_exportees"]
+    nb_supp = st.session_state["nb_supprimees"]
 
     st.divider()
-    st.header("5. Résultats")
+    st.subheader("Résultats")
 
-    # Métriques
     m1, m2, m3, m4, m5 = st.columns(5)
-    m1.metric("Lignes importées", nb_importees_s)
-    m2.metric("Lignes exportées", nb_exportees_s)
-    m3.metric("Lignes supprimées", nb_supprimees_s)
-    m4.metric("Doublons détectés", len(doublons))
-    m5.metric("Consolidations", len(consolidation_journal))
+    m1.metric("Importées",    nb_imp)
+    m2.metric("Exportées",    nb_exp)
+    m3.metric("Supprimées",   nb_supp)
+    m4.metric("Doublons",     len(doublons),           help="Signalés mais non supprimés")
+    m5.metric("Consolidations", len(consolidation_journal), help="Lignes d'adresse réorganisées")
 
-    st.subheader("Aperçu des données nettoyées")
+    # Alertes
+    if doublons:
+        with st.expander(f"⚠️ {len(doublons)} doublon(s) détecté(s) — non supprimés, à vérifier"):
+            for d in doublons:
+                lignes_str = ", ".join(str(l) for l in d["lignes"])
+                st.write(f"• **{d['nom']}** / {d['codepostal']} → lignes {lignes_str}")
 
-    # Coloration via styler
-    doublon_indices = set()
-    for d in doublons:
-        for ligne_num in d["lignes"]:
-            doublon_indices.add(ligne_num - 2)
+    if rapport_lignes:
+        with st.expander(f"⚠️ {len(rapport_lignes)} anomalie(s) de données"):
+            for entry in rapport_lignes:
+                fn = st.error if entry["type"] == "error" else st.warning
+                fn(f"Ligne {entry['ligne']} [{entry['colonne']}] : {entry['message']}")
 
-    consolidated_indices = {entry["ligne"] - 2 for entry in consolidation_journal}
+    # Tableau
+    st.markdown("**Aperçu des données nettoyées**")
+    st.caption("🟥 Rouge = doublon (à vérifier)   🟨 Jaune = adresse réorganisée automatiquement")
+
+    doublon_indices = {ln - 2 for d in doublons for ln in d["lignes"]}
+    consolidated_indices = {e["ligne"] - 2 for e in consolidation_journal}
 
     def highlight_row(row):
         idx = row.name
@@ -256,65 +342,32 @@ if st.session_state.get("processed"):
         return [""] * len(row)
 
     try:
-        styled = result_df.style.apply(highlight_row, axis=1)
-        st.dataframe(styled, use_container_width=True, height=400)
+        st.dataframe(result_df.style.apply(highlight_row, axis=1), use_container_width=True, height=400)
     except Exception:
         st.dataframe(result_df, use_container_width=True, height=400)
 
-    # Légende
-    st.caption("🟥 Rouge = doublon   🟨 Orange = adresse consolidée")
-
-    # Doublons
-    if doublons:
-        with st.expander(f"⚠️ {len(doublons)} doublon(s) détecté(s) — cliquez pour voir le détail"):
-            for d in doublons:
-                lignes_str = ", ".join(str(l) for l in d["lignes"])
-                st.write(f"• **{d['nom']}** / {d['codepostal']} → lignes {lignes_str}")
-
-    # Anomalies
-    if rapport_lignes:
-        with st.expander(f"⚠️ {len(rapport_lignes)} anomalie(s) — cliquez pour voir le détail"):
-            for entry in rapport_lignes:
-                if entry["type"] == "error":
-                    st.error(f"Ligne {entry['ligne']} [{entry['colonne']}] : {entry['message']}")
-                else:
-                    st.warning(f"Ligne {entry['ligne']} [{entry['colonne']}] : {entry['message']}")
-
     st.divider()
-    st.subheader("6. Téléchargement")
+    st.subheader("Téléchargement")
 
     dl1, dl2 = st.columns(2)
-
     with dl1:
         try:
-            excel_bytes = export_excel(
-                result_df,
-                original_mapped,
-                rapport_lignes,
-                doublons,
-                consolidation_journal,
-            )
+            excel_bytes = export_excel(result_df, original_mapped, rapport_lignes, doublons, consolidation_journal)
             st.download_button(
-                "📥 Télécharger le fichier Excel nettoyé",
+                "Télécharger le fichier Excel nettoyé",
                 data=excel_bytes,
                 file_name="adresses_normalisees.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
+                type="primary",
             )
         except Exception as e:
             st.error(f"Erreur génération Excel : {e}")
 
     with dl2:
-        rapport_txt = export_rapport(
-            nb_importees_s,
-            nb_exportees_s,
-            nb_supprimees_s,
-            rapport_lignes,
-            doublons,
-            consolidation_journal,
-        )
+        rapport_txt = export_rapport(nb_imp, nb_exp, nb_supp, rapport_lignes, doublons, consolidation_journal)
         st.download_button(
-            "📄 Télécharger le rapport TXT",
+            "Télécharger le rapport de traitement",
             data=rapport_txt.encode("utf-8"),
             file_name="rapport_normadress.txt",
             mime="text/plain",
