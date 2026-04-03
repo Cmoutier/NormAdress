@@ -6,7 +6,6 @@ from collections import defaultdict
 
 import pandas as pd
 import streamlit as st
-from PIL import Image
 
 from cleaner.loader import load_file
 from cleaner.mapper import auto_map, detect_multi_contacts, STANDARD_FIELDS
@@ -17,8 +16,7 @@ from cleaner.laposte import apply_laposte_rules, format_attention, format_envelo
 from cleaner.bat import generate_bat
 from cleaner.exporter import export_excel, export_rapport
 
-_favicon = Image.open(Path(__file__).parent / "favicon.png")
-st.set_page_config(page_title="NormAdress", page_icon=_favicon, layout="wide")
+st.set_page_config(page_title="NormAdress", page_icon="📬", layout="wide")
 
 # ---------------------------------------------------------------------------
 # Helpers visuels
@@ -102,29 +100,11 @@ def source_card_html(row_orig: dict) -> str:
 # Sidebar — Gestion des travaux
 # ---------------------------------------------------------------------------
 with st.sidebar:
-    st.image("logo.svg", width=120) if Path("logo.svg").exists() else None
     st.markdown("## Travaux")
-    st.caption("Sauvegardez vos paramètres pour reprendre ou modifier ce travail plus tard.")
-
-    # Chargement d'un travail existant
-    work_file = st.file_uploader("Charger un travail (.json)", type=["json"], key="work_loader")
-    if work_file:
-        try:
-            loaded = json.loads(work_file.read().decode("utf-8"))
-            st.session_state["loaded_work"] = loaded
-            st.success(f"Travail chargé : **{loaded.get('nom', '—')}**")
-            st.caption(f"Créé le {loaded.get('date', '—')}")
-            if loaded.get("notes"):
-                st.info(loaded["notes"])
-        except Exception as e:
-            st.error(f"Fichier invalide : {e}")
-
-    st.divider()
 
     # Sauvegarde du travail courant
-    st.markdown("**Enregistrer le travail courant**")
     work_name = st.text_input("Nom du travail / client", placeholder="Ex : Mairie de Lyon — Mai 2026")
-    work_notes = st.text_area("Notes", placeholder="Ex : En attente validation BP…", height=80)
+    work_notes = st.text_area("Notes", placeholder="Ex : En attente validation BP…", height=68)
 
     mapping_to_save = st.session_state.get("last_mapping", {})
     options_to_save = st.session_state.get("last_options", {})
@@ -151,18 +131,40 @@ with st.sidebar:
         st.button("💾 Enregistrer le travail", disabled=True, use_container_width=True,
                   help="Lancez d'abord un traitement pour activer la sauvegarde.")
 
+    st.divider()
+
+    # Chargement d'un travail existant
+    st.markdown("**Reprendre un travail**")
+    work_file = st.file_uploader("Charger un travail (.json)", type=["json"], key="work_loader",
+                                 label_visibility="collapsed")
+    if work_file:
+        try:
+            loaded = json.loads(work_file.read().decode("utf-8"))
+            st.session_state["loaded_work"] = loaded
+            st.success(f"Travail chargé : **{loaded.get('nom', '—')}**")
+            st.caption(f"Créé le {loaded.get('date', '—')}")
+            if loaded.get("notes"):
+                st.info(loaded["notes"])
+        except Exception as e:
+            st.error(f"Fichier invalide : {e}")
+
 # ---------------------------------------------------------------------------
 # En-tête
 # ---------------------------------------------------------------------------
-col_logo, col_title = st.columns([1, 11])
+col_logo, col_desc = st.columns([2, 5])
 with col_logo:
     try:
-        st.image("logo.svg", width=72)
+        st.image("logo.svg", width=240)
     except Exception:
-        pass
-with col_title:
-    st.title("NormAdress")
-    st.caption("Mise en conformité de fichiers d'adresses pour publipostage Word")
+        st.title("NormAdress")
+with col_desc:
+    st.markdown(
+        "<div style='padding-top:18px;font-size:15px;color:#555;'>"
+        "Mise en conformité de fichiers d'adresses pour publipostage Word<br>"
+        "<span style='font-size:12px;color:#999;'>Norme La Poste NF Z 10-011 · "
+        "Particuliers &amp; professionnels · Excel / CSV → Word</span></div>",
+        unsafe_allow_html=True,
+    )
 
 st.divider()
 
@@ -353,6 +355,12 @@ st.subheader(f"Étape {step_n2} — Lancer la mise en conformité")
 
 champs = sorted(set(mapping.values()))
 st.markdown(f"**{len(mapping)}** colonne(s) → `{'` · `'.join(champs)}`")
+st.info(
+    "**Ce que fait ce bouton :** nettoie les adresses selon les options choisies et génère un nouveau fichier Excel "
+    "— votre fichier original n'est jamais modifié. "
+    "Les fichiers à télécharger apparaissent immédiatement après le traitement.",
+    icon="ℹ️",
+)
 
 if st.button("Mettre en conformité", type="primary", use_container_width=True):
     with st.spinner("Traitement en cours…"):
@@ -455,6 +463,56 @@ m3.metric("Supprimées",     nb_supp)
 m4.metric("Doublons",       len(doublons),             help="Signalés, non supprimés")
 m5.metric("Consolidations", len(consolidation_journal), help="Adresses réorganisées")
 m6.metric("Alertes",        len(coherence_alerts) + len(laposte_alerts))
+
+# Téléchargements rapides (visibles immédiatement)
+dl1, dl2, dl3 = st.columns(3)
+with dl1:
+    try:
+        excel_bytes = export_excel(
+            result_df, original_mapped, rapport_lignes, doublons, consolidation_journal,
+        )
+        st.download_button(
+            "📥 Télécharger l'Excel nettoyé",
+            data=excel_bytes,
+            file_name="adresses_normalisees.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+            type="primary",
+        )
+    except Exception as e:
+        st.error(f"Erreur génération Excel : {e}")
+with dl2:
+    rapport_txt = export_rapport(
+        nb_imp, nb_exp, nb_supp, rapport_lignes, doublons, consolidation_journal,
+    )
+    st.download_button(
+        "📄 Rapport de traitement (.txt)",
+        data=rapport_txt.encode("utf-8"),
+        file_name="rapport_normadress.txt",
+        mime="text/plain",
+        use_container_width=True,
+    )
+with dl3:
+    try:
+        _saved_work_name = st.session_state.get("work_name", "") or "NormAdress"
+        bat_html = generate_bat(
+            result_df,
+            nom_travail=_saved_work_name,
+            doublons=doublons,
+            consolidation_journal=consolidation_journal,
+        )
+        st.download_button(
+            "🖨️ BAT — Bon À Tirer (HTML imprimable)",
+            data=bat_html.encode("utf-8"),
+            file_name=f"BAT_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
+            mime="text/html",
+            use_container_width=True,
+            help="Ouvrez dans un navigateur → Ctrl+P pour imprimer ou enregistrer en PDF",
+        )
+    except Exception as e:
+        st.error(f"Erreur génération BAT : {e}")
+
+st.caption("💡 Le fichier source original n'est jamais modifié — l'Excel nettoyé est un nouveau fichier généré en mémoire.")
 
 # ---------------------------------------------------------------------------
 # TABS
@@ -618,58 +676,3 @@ with tab_alertes:
                     fn = st.error if e["type"] == "error" else st.warning
                     fn(f"Ligne {e['ligne']} [{e['colonne']}] : {e['message']}")
 
-# ---------------------------------------------------------------------------
-# Téléchargement
-# ---------------------------------------------------------------------------
-st.divider()
-st.subheader("Téléchargement")
-
-dl1, dl2, dl3 = st.columns(3)
-
-with dl1:
-    try:
-        excel_bytes = export_excel(
-            result_df, original_mapped, rapport_lignes, doublons, consolidation_journal,
-        )
-        st.download_button(
-            "📥 Fichier Excel nettoyé",
-            data=excel_bytes,
-            file_name="adresses_normalisees.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True,
-            type="primary",
-        )
-    except Exception as e:
-        st.error(f"Erreur génération Excel : {e}")
-
-with dl2:
-    rapport_txt = export_rapport(
-        nb_imp, nb_exp, nb_supp, rapport_lignes, doublons, consolidation_journal,
-    )
-    st.download_button(
-        "📄 Rapport de traitement",
-        data=rapport_txt.encode("utf-8"),
-        file_name="rapport_normadress.txt",
-        mime="text/plain",
-        use_container_width=True,
-    )
-
-with dl3:
-    try:
-        saved_work_name = st.session_state.get("work_name", "") or "NormAdress"
-        bat_html = generate_bat(
-            result_df,
-            nom_travail=saved_work_name,
-            doublons=doublons,
-            consolidation_journal=consolidation_journal,
-        )
-        st.download_button(
-            "🖨️ BAT — Bon À Tirer (HTML)",
-            data=bat_html.encode("utf-8"),
-            file_name=f"BAT_{datetime.now().strftime('%Y%m%d_%H%M')}.html",
-            mime="text/html",
-            use_container_width=True,
-            help="Ouvrez dans un navigateur → Ctrl+P pour imprimer ou enregistrer en PDF",
-        )
-    except Exception as e:
-        st.error(f"Erreur génération BAT : {e}")
