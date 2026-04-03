@@ -10,6 +10,7 @@ from cleaner.mapper import auto_map, detect_multi_contacts, STANDARD_FIELDS
 from cleaner.rules import apply_rules
 from cleaner.consolidator import consolidate_addresses, remove_empty_rows, detect_duplicates
 from cleaner.coherence import run_all as run_coherence
+from cleaner.laposte import apply_laposte_rules, format_attention
 from cleaner.exporter import export_excel, export_rapport
 
 _favicon = Image.open(Path(__file__).parent / "favicon.png")
@@ -204,7 +205,7 @@ if multi_contacts:
 # ---------------------------------------------------------------------------
 st.subheader("Étape 3 — Options de nettoyage" if not multi_contacts else "Étape 4 — Options de nettoyage")
 
-with st.expander("Règles appliquées (toutes activées par défaut)", expanded=False):
+with st.expander("Règles de base (toutes activées par défaut)", expanded=False):
     col1, col2 = st.columns(2)
     with col1:
         opt_espaces    = st.checkbox("Supprimer les espaces et caractères invisibles", value=True)
@@ -217,6 +218,48 @@ with st.expander("Règles appliquées (toutes activées par défaut)", expanded=
         opt_consolidation   = st.checkbox("Consolider les lignes d'adresse (Adresse1 toujours remplie en premier)", value=True)
         opt_supprimer_vides = st.checkbox("Supprimer les lignes entièrement vides", value=True)
 
+st.markdown("**Conformité La Poste — Norme NF Z 10-011 (RNVP)**")
+st.caption(
+    "Ces règles alignent vos adresses sur les exigences de La Poste pour garantir l'acheminement. "
+    "Les deux premières sont activées par défaut car elles ne changent pas le sens des données."
+)
+with st.expander("Règles La Poste", expanded=True):
+    lp1, lp2 = st.columns(2)
+    with lp1:
+        opt_bp_cs = st.checkbox(
+            "Normaliser BP / CS / TSA",
+            value=True,
+            help="Ex : 'B.P.123' → 'BP 123', 'CS70001' → 'CS 70001'",
+        )
+        opt_ponctuation = st.checkbox(
+            "Supprimer la ponctuation parasite dans les adresses",
+            value=True,
+            help="Virgules, points, parenthèses dans les champs Adresse",
+        )
+        opt_completude = st.checkbox(
+            "Vérifier la complétude (norme NF Z 10-011)",
+            value=True,
+            help="Signale les adresses sans Numéro+Voie, CodePostal ou Ville",
+        )
+    with lp2:
+        opt_abrev = st.checkbox(
+            "Abréviations officielles des types de voie (RNVP)",
+            value=False,
+            help="Ex : 'AVENUE' → 'AV', 'BOULEVARD' → 'BD', 'IMPASSE' → 'IMP'\n"
+                 "⚠️ Active automatiquement la désaccentuation",
+        )
+        opt_desacc = st.checkbox(
+            "Désaccentuation (OCR La Poste)",
+            value=False,
+            help="Supprime les accents pour la lecture optique : É→E, À→A, Ç→C\n"
+                 "Recommandé pour les envois en masse",
+        )
+        opt_attention = st.checkbox(
+            "Générer 'À L'ATTENTION DE' pour les B2B",
+            value=False,
+            help="Quand Société + Contact : insère 'A L'ATTENTION DE M. DUPONT' en Adresse2",
+        )
+
 options = {
     "espaces":    opt_espaces,
     "civilite":   opt_civilite,
@@ -224,6 +267,14 @@ options = {
     "prenom":     opt_prenom,
     "codepostal": opt_codepostal,
     "ville":      opt_ville,
+}
+
+laposte_options = {
+    "bp_cs":              opt_bp_cs,
+    "ponctuation_adresse": opt_ponctuation,
+    "completude":         opt_completude,
+    "abreviations_voies": opt_abrev,
+    "desaccentuation":    opt_desacc or opt_abrev,  # abréviations implique désaccentuation
 }
 
 st.divider()
@@ -266,6 +317,21 @@ if run:
 
             mapped_df, rapport_lignes = apply_rules(mapped_df, options)
 
+            # Mention "À L'ATTENTION DE" pour les B2B
+            if opt_attention and "Societe" in mapped_df.columns:
+                for idx in mapped_df.index:
+                    soc = str(mapped_df.at[idx, "Societe"]).strip()
+                    nom = str(mapped_df.at[idx, "Nom"]).strip() if "Nom" in mapped_df.columns else ""
+                    prenom = str(mapped_df.at[idx, "Prenom"]).strip() if "Prenom" in mapped_df.columns else ""
+                    civ = str(mapped_df.at[idx, "Civilite"]).strip() if "Civilite" in mapped_df.columns else ""
+                    if soc and (nom or prenom):
+                        adr2 = str(mapped_df.at[idx, "Adresse2"]).strip() if "Adresse2" in mapped_df.columns else ""
+                        if not adr2 and "Adresse2" in mapped_df.columns:
+                            mapped_df.at[idx, "Adresse2"] = format_attention(civ, prenom, nom)
+
+            # Règles La Poste (RNVP)
+            mapped_df, laposte_alerts = apply_laposte_rules(mapped_df, laposte_options)
+
             consolidation_journal = []
             if opt_consolidation:
                 mapped_df, consolidation_journal = consolidate_addresses(mapped_df)
@@ -285,6 +351,7 @@ if run:
                 "doublons": doublons,
                 "consolidation_journal": consolidation_journal,
                 "coherence_alerts": coherence_alerts,
+                "laposte_alerts": laposte_alerts,
                 "nb_importees": nb_importees,
                 "nb_exportees": nb_exportees,
                 "nb_supprimees": nb_supprimees,
@@ -305,6 +372,7 @@ if st.session_state.get("processed"):
     doublons              = st.session_state["doublons"]
     consolidation_journal = st.session_state["consolidation_journal"]
     coherence_alerts      = st.session_state.get("coherence_alerts", [])
+    laposte_alerts        = st.session_state.get("laposte_alerts", [])
     nb_imp  = st.session_state["nb_importees"]
     nb_exp  = st.session_state["nb_exportees"]
     nb_supp = st.session_state["nb_supprimees"]
@@ -318,7 +386,7 @@ if st.session_state.get("processed"):
     m3.metric("Supprimées",     nb_supp)
     m4.metric("Doublons",       len(doublons),                help="Signalés mais non supprimés")
     m5.metric("Consolidations", len(consolidation_journal),   help="Lignes d'adresse réorganisées")
-    m6.metric("Alertes cohérence", len(coherence_alerts),     help="Problèmes inter-champs détectés")
+    m6.metric("Alertes cohérence", len(coherence_alerts) + len(laposte_alerts), help="Problèmes inter-champs et conformité La Poste")
 
     # --- Alertes de cohérence groupées par type ---
     if coherence_alerts:
@@ -347,6 +415,20 @@ if st.session_state.get("processed"):
                     st.markdown(f"**{t}** ({len(items)} ligne(s))")
                     for a in items:
                         st.markdown(f"  - Ligne {a['ligne']} : {a['message']}  \n    → *{a['suggestion']}*")
+
+    # Alertes La Poste
+    if laposte_alerts:
+        from collections import defaultdict as _dd
+        lp_by_type = _dd(list)
+        for a in laposte_alerts:
+            lp_by_type[a["type"]].append(a)
+        with st.expander(f"📮 {len(laposte_alerts)} alerte(s) de conformité La Poste (NF Z 10-011)"):
+            for t, items in lp_by_type.items():
+                st.markdown(f"**{t}** ({len(items)} ligne(s))")
+                for a in items[:20]:  # limiter l'affichage
+                    st.markdown(f"  - Ligne {a['ligne']} : {a['message']}  \n    → *{a['suggestion']}*")
+                if len(items) > 20:
+                    st.caption(f"… et {len(items) - 20} autres lignes du même type.")
 
     # Doublons
     if doublons:
