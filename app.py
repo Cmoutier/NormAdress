@@ -1,7 +1,9 @@
 """NormAdress — Application Streamlit de mise en conformité d'adresses."""
 import io
+from pathlib import Path
 import pandas as pd
 import streamlit as st
+from PIL import Image
 
 from cleaner.loader import load_file
 from cleaner.mapper import auto_map, detect_multi_contacts, STANDARD_FIELDS
@@ -9,9 +11,10 @@ from cleaner.rules import apply_rules
 from cleaner.consolidator import consolidate_addresses, remove_empty_rows, detect_duplicates
 from cleaner.exporter import export_excel, export_rapport
 
+_favicon = Image.open(Path(__file__).parent / "favicon.png")
 st.set_page_config(
     page_title="NormAdress",
-    page_icon="📬",
+    page_icon=_favicon,
     layout="wide",
 )
 
