@@ -281,18 +281,49 @@ if not mapping:
     st.warning("Associez au moins une colonne à un champ pour continuer.")
     st.stop()
 
+# ---- Aperçu live du résultat selon le mapping actuel ----
+with st.expander("👁 Aperçu du résultat selon le mapping (données brutes, avant nettoyage)", expanded=False):
+    _preview_rows = []
+    for _, _row in source_df.head(100).iterrows():
+        _pr = {f: "" for f in STANDARD_FIELDS}
+        _fv = defaultdict(list)
+        for _sc, _f in mapping.items():
+            if _f in STANDARD_FIELDS:
+                _v = str(_row.get(_sc, "")).strip()
+                if _v:
+                    _fv[_f].append(_v)
+        for _f, _vs in _fv.items():
+            _pr[_f] = " et ".join(_vs)
+        _preview_rows.append(_pr)
+
+    _ex_part = next((r for r in _preview_rows if not r.get("Societe") and (r.get("Nom") or r.get("Prenom"))), None)
+    _ex_pro  = next((r for r in _preview_rows if r.get("Societe")), None)
+
+    _pc1, _pc2 = st.columns(2)
+    for _col, _ex, _label in [(_pc1, _ex_part, "Particulier"), (_pc2, _ex_pro, "Professionnel")]:
+        with _col:
+            st.markdown(f"**Exemple {_label}**")
+            if _ex:
+                _lines = format_envelope_lines(_ex)
+                st.markdown(envelope_html(_lines, compact=True), unsafe_allow_html=True)
+            else:
+                st.caption(f"Aucun exemple {_label.lower()} dans les 100 premières lignes.")
+
 st.divider()
 
 # ---------------------------------------------------------------------------
 # ÉTAPE 3 — Multi-contacts
 # ---------------------------------------------------------------------------
 multi_contacts = detect_multi_contacts(mapping)
-explode = False
 if multi_contacts:
-    fields_str = ", ".join(f"**{f}** ({len(c)} colonnes)" for f, c in multi_contacts.items())
+    fields_str = ", ".join(f"**{f}** ({len(c)} col.)" for f, c in multi_contacts.items())
     st.subheader("Étape 3 — Fichier multi-contacts détecté")
-    st.warning(f"Plusieurs colonnes → même champ : {fields_str}.")
-    explode = st.checkbox("Éclater en une ligne par contact", value=False)
+    st.info(
+        f"Plusieurs colonnes mappées vers le même champ : {fields_str}. "
+        "Les valeurs seront **concaténées** sur une seule ligne "
+        "(ex : *M. DUPONT et Mme MARTIN*).",
+        icon="ℹ️",
+    )
     st.divider()
 
 # ---------------------------------------------------------------------------
@@ -316,6 +347,8 @@ with st.expander("Règles de base", expanded=False):
         opt_civilite   = _opt("civilite",   "Civilités (M. / Mme / Mlle)", True)
         opt_nom        = _opt("nom",        "Nom en MAJUSCULES", True)
         opt_prenom     = _opt("prenom",     "Prénom en Titre (Jean-Pierre)", True)
+        opt_nom_avant_prenom = _opt("nom_avant_prenom", "NOM avant Prénom (ex : DUPONT Jean)", False,
+                                    "Inverse l'ordre d'affichage : NOM Prénom au lieu de Prénom NOM")
     with b2:
         opt_codepostal      = _opt("codepostal",      "Codes postaux (1000 → 01000)", True)
         opt_ville           = _opt("ville",           "Ville en MAJUSCULES", True)
@@ -338,6 +371,7 @@ with st.expander("Conformité La Poste — NF Z 10-011", expanded=True):
 options = {
     "espaces": opt_espaces, "civilite": opt_civilite, "nom": opt_nom,
     "prenom": opt_prenom, "codepostal": opt_codepostal, "ville": opt_ville,
+    "nom_avant_prenom": opt_nom_avant_prenom,
 }
 laposte_options = {
     "bp_cs": opt_bp_cs, "ponctuation_adresse": opt_ponctuation,
@@ -365,21 +399,22 @@ st.info(
 if st.button("Mettre en conformité", type="primary", use_container_width=True):
     with st.spinner("Traitement en cours…"):
         try:
+            # Concaténation des multi-contacts sur une seule ligne
             mapped_rows = []
             for _, row in source_df.iterrows():
                 new_row = {f: "" for f in STANDARD_FIELDS}
+                field_vals: dict[str, list[str]] = defaultdict(list)
                 for src_col, field in mapping.items():
-                    if field in STANDARD_FIELDS and not new_row[field]:
-                        new_row[field] = str(row.get(src_col, ""))
+                    if field in STANDARD_FIELDS:
+                        v = str(row.get(src_col, "")).strip()
+                        if v:
+                            field_vals[field].append(v)
+                for field, vals in field_vals.items():
+                    new_row[field] = " et ".join(vals)
                 mapped_rows.append(new_row)
 
             mapped_df = pd.DataFrame(mapped_rows, columns=STANDARD_FIELDS)
             original_mapped = mapped_df.copy()
-
-            if explode and multi_contacts:
-                from cleaner.consolidator import explode_multi_contacts
-                mapped_df = explode_multi_contacts(mapped_df, multi_contacts, source_df)
-                original_mapped = mapped_df.copy()
 
             mapped_df, coherence_alerts = run_coherence(mapped_df)
             mapped_df, rapport_lignes   = apply_rules(mapped_df, options)
@@ -424,6 +459,7 @@ if st.button("Mettre en conformité", type="primary", use_container_width=True):
                 "nb_importees": nb_importees,
                 "nb_exportees": nb_exportees,
                 "nb_supprimees": nb_supprimees,
+                "nom_avant_prenom": opt_nom_avant_prenom,
                 "processed": True,
                 "envelope_idx": 0,
                 "work_name": work_name if "work_name" in dir() else "",
@@ -449,6 +485,7 @@ laposte_alerts        = st.session_state.get("laposte_alerts", [])
 nb_imp  = st.session_state["nb_importees"]
 nb_exp  = st.session_state["nb_exportees"]
 nb_supp = st.session_state["nb_supprimees"]
+nom_avant_prenom = st.session_state.get("nom_avant_prenom", False)
 
 doublon_indices      = {ln - 2 for d in doublons for ln in d["lignes"]}
 consolidated_indices = {e["ligne"] - 2 for e in consolidation_journal}
@@ -500,6 +537,7 @@ with dl3:
             nom_travail=_saved_work_name,
             doublons=doublons,
             consolidation_journal=consolidation_journal,
+            nom_avant_prenom=nom_avant_prenom,
         )
         st.download_button(
             "🖨️ BAT — Bon À Tirer (HTML imprimable)",
@@ -599,7 +637,7 @@ with tab_env:
     with col_env:
         st.markdown("**Adresse normalisée — Format La Poste**")
         row_clean = result_df.loc[current_idx].to_dict()
-        env_lines = format_envelope_lines(row_clean)
+        env_lines = format_envelope_lines(row_clean, nom_avant_prenom=nom_avant_prenom)
         st.markdown(envelope_html(env_lines), unsafe_allow_html=True)
 
     # Détail des champs normalisés

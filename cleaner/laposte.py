@@ -285,18 +285,21 @@ def apply_laposte_rules(df: pd.DataFrame, options: dict) -> tuple[pd.DataFrame, 
 # Format enveloppe — structure NF Z 10-011
 # ---------------------------------------------------------------------------
 
-def format_envelope_lines(row: dict) -> list[tuple[str, str]]:
+def format_envelope_lines(row: dict, nom_avant_prenom: bool = False) -> list[tuple[str, str]]:
     """
     Retourne les lignes d'adresse selon la norme La Poste NF Z 10-011.
     Chaque tuple : (numéro_ligne, contenu)
 
     Structure :
-      L1 — Raison sociale OU Civilité Prénom NOM
+      L1 — Raison sociale OU Civilité Prénom NOM  (ou NOM Prénom si nom_avant_prenom=True)
       L2 — Complément identité (contact B2B)
       L3 — Adresse3 : bâtiment, résidence, étage
       L4 — Adresse1 : N° et libellé de voie  (ligne obligatoire)
       L5 — Adresse2 : BP, lieu-dit, complément de distribution
       L6 — CODE POSTAL  VILLE
+
+    Args:
+        nom_avant_prenom: si True, ordre Civ NOM Prénom au lieu de Civ Prénom NOM
     """
     civ     = str(row.get("Civilite",   "")).strip()
     prenom  = str(row.get("Prenom",     "")).strip()
@@ -308,7 +311,10 @@ def format_envelope_lines(row: dict) -> list[tuple[str, str]]:
     cp      = str(row.get("CodePostal", "")).strip()
     ville   = str(row.get("Ville",      "")).strip()
 
-    contact = " ".join(p for p in [civ, prenom, nom] if p)
+    if nom_avant_prenom:
+        contact = " ".join(p for p in [civ, nom, prenom] if p)
+    else:
+        contact = " ".join(p for p in [civ, prenom, nom] if p)
     lines: list[tuple[str, str]] = []
 
     if societe:

@@ -84,8 +84,9 @@ def _card_html(
     line_num: int,
     is_doublon: bool = False,
     is_consolidated: bool = False,
+    nom_avant_prenom: bool = False,
 ) -> str:
-    lines = format_envelope_lines(row)
+    lines = format_envelope_lines(row, nom_avant_prenom=nom_avant_prenom)
     has_voie = any(lbl == "L4" for lbl, _ in lines)
 
     lines_html = ""
@@ -127,6 +128,7 @@ def generate_bat(
     nom_travail: str = "",
     doublons: list | None = None,
     consolidation_journal: list | None = None,
+    nom_avant_prenom: bool = False,
 ) -> str:
     """
     Génère le HTML complet du BAT.
@@ -159,6 +161,7 @@ def generate_bat(
             line_num=position,
             is_doublon=idx in doublon_indices,
             is_consolidated=idx in consolidated_indices,
+            nom_avant_prenom=nom_avant_prenom,
         )
 
     return f"""<!DOCTYPE html>
