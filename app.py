@@ -9,6 +9,7 @@ from cleaner.loader import load_file
 from cleaner.mapper import auto_map, detect_multi_contacts, STANDARD_FIELDS
 from cleaner.rules import apply_rules
 from cleaner.consolidator import consolidate_addresses, remove_empty_rows, detect_duplicates
+from cleaner.coherence import run_all as run_coherence
 from cleaner.exporter import export_excel, export_rapport
 
 _favicon = Image.open(Path(__file__).parent / "favicon.png")
@@ -260,6 +261,9 @@ if run:
                 mapped_df = explode_multi_contacts(mapped_df, multi_contacts, source_df)
                 original_mapped = mapped_df.copy()
 
+            # Cohérence inter-champs (avant nettoyage)
+            mapped_df, coherence_alerts = run_coherence(mapped_df)
+
             mapped_df, rapport_lignes = apply_rules(mapped_df, options)
 
             consolidation_journal = []
@@ -280,6 +284,7 @@ if run:
                 "rapport_lignes": rapport_lignes,
                 "doublons": doublons,
                 "consolidation_journal": consolidation_journal,
+                "coherence_alerts": coherence_alerts,
                 "nb_importees": nb_importees,
                 "nb_exportees": nb_exportees,
                 "nb_supprimees": nb_supprimees,
@@ -294,11 +299,12 @@ if run:
 # RÉSULTATS
 # ---------------------------------------------------------------------------
 if st.session_state.get("processed"):
-    result_df          = st.session_state["result_df"]
-    original_mapped    = st.session_state["original_mapped"]
-    rapport_lignes     = st.session_state["rapport_lignes"]
-    doublons           = st.session_state["doublons"]
+    result_df             = st.session_state["result_df"]
+    original_mapped       = st.session_state["original_mapped"]
+    rapport_lignes        = st.session_state["rapport_lignes"]
+    doublons              = st.session_state["doublons"]
     consolidation_journal = st.session_state["consolidation_journal"]
+    coherence_alerts      = st.session_state.get("coherence_alerts", [])
     nb_imp  = st.session_state["nb_importees"]
     nb_exp  = st.session_state["nb_exportees"]
     nb_supp = st.session_state["nb_supprimees"]
@@ -306,20 +312,50 @@ if st.session_state.get("processed"):
     st.divider()
     st.subheader("Résultats")
 
-    m1, m2, m3, m4, m5 = st.columns(5)
-    m1.metric("Importées",    nb_imp)
-    m2.metric("Exportées",    nb_exp)
-    m3.metric("Supprimées",   nb_supp)
-    m4.metric("Doublons",     len(doublons),           help="Signalés mais non supprimés")
-    m5.metric("Consolidations", len(consolidation_journal), help="Lignes d'adresse réorganisées")
+    m1, m2, m3, m4, m5, m6 = st.columns(6)
+    m1.metric("Importées",      nb_imp)
+    m2.metric("Exportées",      nb_exp)
+    m3.metric("Supprimées",     nb_supp)
+    m4.metric("Doublons",       len(doublons),                help="Signalés mais non supprimés")
+    m5.metric("Consolidations", len(consolidation_journal),   help="Lignes d'adresse réorganisées")
+    m6.metric("Alertes cohérence", len(coherence_alerts),     help="Problèmes inter-champs détectés")
 
-    # Alertes
+    # --- Alertes de cohérence groupées par type ---
+    if coherence_alerts:
+        from collections import defaultdict
+        by_type = defaultdict(list)
+        for a in coherence_alerts:
+            by_type[a["type"]].append(a)
+
+        auto_fixed = [a for a in coherence_alerts if a["auto_fixable"]]
+        to_review  = [a for a in coherence_alerts if not a["auto_fixable"]]
+
+        if auto_fixed:
+            with st.expander(f"✅ {len(auto_fixed)} correction(s) appliquée(s) automatiquement"):
+                for t, items in by_type.items():
+                    if not items[0]["auto_fixable"]:
+                        continue
+                    st.markdown(f"**{t}** ({len(items)} ligne(s))")
+                    for a in items:
+                        st.markdown(f"  - Ligne {a['ligne']} : {a['message']}  \n    → *{a['suggestion']}*")
+
+        if to_review:
+            with st.expander(f"⚠️ {len(to_review)} point(s) à vérifier manuellement"):
+                for t, items in by_type.items():
+                    if items[0]["auto_fixable"]:
+                        continue
+                    st.markdown(f"**{t}** ({len(items)} ligne(s))")
+                    for a in items:
+                        st.markdown(f"  - Ligne {a['ligne']} : {a['message']}  \n    → *{a['suggestion']}*")
+
+    # Doublons
     if doublons:
         with st.expander(f"⚠️ {len(doublons)} doublon(s) détecté(s) — non supprimés, à vérifier"):
             for d in doublons:
                 lignes_str = ", ".join(str(l) for l in d["lignes"])
                 st.write(f"• **{d['nom']}** / {d['codepostal']} → lignes {lignes_str}")
 
+    # Anomalies de nettoyage
     if rapport_lignes:
         with st.expander(f"⚠️ {len(rapport_lignes)} anomalie(s) de données"):
             for entry in rapport_lignes:
