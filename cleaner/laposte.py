@@ -279,3 +279,54 @@ def apply_laposte_rules(df: pd.DataFrame, options: dict) -> tuple[pd.DataFrame, 
         alerts.extend(check_completude(df))
 
     return df, alerts
+
+
+# ---------------------------------------------------------------------------
+# Format enveloppe — structure NF Z 10-011
+# ---------------------------------------------------------------------------
+
+def format_envelope_lines(row: dict) -> list[tuple[str, str]]:
+    """
+    Retourne les lignes d'adresse selon la norme La Poste NF Z 10-011.
+    Chaque tuple : (numéro_ligne, contenu)
+
+    Structure :
+      L1 — Raison sociale OU Civilité Prénom NOM
+      L2 — Complément identité (contact B2B)
+      L3 — Adresse3 : bâtiment, résidence, étage
+      L4 — Adresse1 : N° et libellé de voie  (ligne obligatoire)
+      L5 — Adresse2 : BP, lieu-dit, complément de distribution
+      L6 — CODE POSTAL  VILLE
+    """
+    civ     = str(row.get("Civilite",   "")).strip()
+    prenom  = str(row.get("Prenom",     "")).strip()
+    nom     = str(row.get("Nom",        "")).strip()
+    societe = str(row.get("Societe",    "")).strip()
+    adr1    = str(row.get("Adresse1",   "")).strip()
+    adr2    = str(row.get("Adresse2",   "")).strip()
+    adr3    = str(row.get("Adresse3",   "")).strip()
+    cp      = str(row.get("CodePostal", "")).strip()
+    ville   = str(row.get("Ville",      "")).strip()
+
+    contact = " ".join(p for p in [civ, prenom, nom] if p)
+    lines: list[tuple[str, str]] = []
+
+    if societe:
+        lines.append(("L1", societe))
+        if contact:
+            lines.append(("L2", contact))
+    elif contact:
+        lines.append(("L1", contact))
+
+    if adr3:
+        lines.append(("L3", adr3))
+    if adr1:
+        lines.append(("L4", adr1))
+    if adr2:
+        lines.append(("L5", adr2))
+
+    cp_ville = " ".join(p for p in [cp, ville] if p)
+    if cp_ville:
+        lines.append(("L6", cp_ville))
+
+    return lines
