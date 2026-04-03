@@ -1,0 +1,51 @@
+<svg viewBox="40 42 255 228" xmlns="http://www.w3.org/2000/svg">
+
+<!-- Feuille Excel — corps -->
+<rect x="60" y="60" width="160" height="190" rx="10" fill="rgb(30, 107, 60)"/>
+<!-- Onglet -->
+<rect x="68" y="52" width="52" height="14" rx="4" fill="rgb(21, 82, 48)"/>
+
+<!-- Lignes de grille horizontales -->
+<line x1="68" y1="100" x2="212" y2="100" stroke="rgb(58, 158, 101)" stroke-width="0.8"/>
+<line x1="68" y1="122" x2="212" y2="122" stroke="rgb(58, 158, 101)" stroke-width="0.8"/>
+<line x1="68" y1="144" x2="212" y2="144" stroke="rgb(58, 158, 101)" stroke-width="0.8"/>
+<line x1="68" y1="166" x2="212" y2="166" stroke="rgb(58, 158, 101)" stroke-width="0.8"/>
+<line x1="68" y1="188" x2="212" y2="188" stroke="rgb(58, 158, 101)" stroke-width="0.8"/>
+<line x1="68" y1="210" x2="212" y2="210" stroke="rgb(58, 158, 101)" stroke-width="0.8"/>
+<!-- Ligne verticale -->
+<line x1="120" y1="70" x2="120" y2="240" stroke="rgb(58, 158, 101)" stroke-width="0.8"/>
+
+<!-- En-tête colonnes -->
+<rect x="68" y="70" width="52" height="22" fill="rgb(21, 82, 48)" rx="2"/>
+<rect x="124" y="70" width="80" height="22" fill="rgb(21, 82, 48)" rx="2"/>
+
+<!-- Cellules colorées -->
+<rect x="68" y="101" width="52" height="21" fill="rgb(45, 138, 82)"/>
+<rect x="124" y="101" width="80" height="21" fill="rgb(45, 138, 82)"/>
+<rect x="68" y="123" width="52" height="21" fill="rgb(45, 138, 82)"/>
+<rect x="124" y="123" width="80" height="21" fill="rgb(45, 138, 82)"/>
+<rect x="68" y="145" width="52" height="21" fill="rgb(39, 174, 96)"/>
+<rect x="124" y="145" width="80" height="21" fill="rgb(39, 174, 96)"/>
+<rect x="68" y="167" width="52" height="21" fill="rgb(39, 174, 96)"/>
+<rect x="124" y="167" width="80" height="21" fill="rgb(39, 174, 96)"/>
+
+<!-- Coches -->
+<polyline points="131,156 136,162 148,150" fill="none" stroke="rgb(255,255,255)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="131,178 136,184 148,172" fill="none" stroke="rgb(255,255,255)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="76,156 81,162 93,150" fill="none" stroke="rgb(255,255,255)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+<polyline points="76,178 81,184 93,172" fill="none" stroke="rgb(255,255,255)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+
+<!-- Baguette magique -->
+<line x1="195" y1="240" x2="242" y2="115" stroke="rgb(245, 200, 66)" stroke-width="3.5" stroke-linecap="round"/>
+<!-- Étoile -->
+<polygon points="242,100 245,110 255,110 247,117 250,127 242,121 234,127 237,117 229,110 239,110" fill="rgb(245, 200, 66)"/>
+
+<!-- Étincelles -->
+<circle cx="262" cy="95" r="4" fill="rgb(245, 200, 66)"/>
+<circle cx="272" cy="108" r="2.5" fill="rgb(255, 255, 255)"/>
+<circle cx="255" cy="82" r="3" fill="rgb(245, 200, 66)"/>
+<circle cx="278" cy="90" r="2" fill="rgb(255, 255, 255)"/>
+<circle cx="268" cy="75" r="2.5" fill="rgb(245, 200, 66)"/>
+<circle cx="283" cy="100" r="1.8" fill="rgb(255, 255, 255)"/>
+
+</svg>
