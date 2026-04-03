@@ -5,185 +5,82 @@
 
 NormAdress est une application web interne utilisée par une entreprise de routage postal. Les clients fournissent des fichiers Excel contenant des listes d'adresses pour réaliser des publipostages (impression + mise sous pli + envoi postal). Ces fichiers sont souvent mal formatés et nécessitent une mise en conformité avant utilisation dans Word.
 
+L'application applique les règles de la norme **La Poste NF Z 10-011** (RNVP — Restructuration, Normalisation et Validation Postale) et génère un **BAT (Bon À Tirer)** imprimable pour validation client.
+
 ---
 
-## Stack technique obligatoire
+## Stack technique
 
 - **Backend** : Python 3.11+
 - **Interface** : Streamlit (pas Flask, pas FastAPI — Streamlit uniquement)
 - **Traitement fichiers** : pandas + openpyxl
 - **Tests** : pytest + pytest-cov
-- **Export** : openpyxl pour la génération du fichier Excel propre
-- **Base de données** : aucune en v1 — application 100% stateless
+- **Export** : openpyxl (Excel coloré) + HTML (BAT) + JSON (travaux)
+- **Base de données** : aucune — application 100% stateless
+- **Favicon** : PIL/Pillow (conversion SVG → PNG)
 
 ---
 
-## Pipeline de déploiement à mettre en place
-
-Claude Code doit configurer l'intégralité du pipeline suivant :
+## Pipeline de déploiement
 
 ```
 Développement local → GitHub (push sur main) → Render (déploiement automatique)
 ```
 
-### Étape 1 — Initialisation Git et GitHub
-
-Le repo GitHub existe déjà : **https://github.com/Cmoutier/NormAdress**
+- Repo GitHub : **https://github.com/Cmoutier/NormAdress**
+- URL application : **https://normadress.onrender.com**
+- CI : GitHub Actions (`.github/workflows/ci.yml`)
+- Render se met en veille après 15 min d'inactivité (plan gratuit — cold start ~60s)
 
 ```bash
-git init
 git add .
-git commit -m "feat: initial commit NormAdress"
-git remote add origin https://github.com/Cmoutier/NormAdress.git
-git branch -M main
-git push -u origin main
-```
-
-### Étape 2 — Fichiers de configuration Render
-
-Créer le fichier `render.yaml` à la racine :
-
-```yaml
-services:
-  - type: web
-    name: normadress
-    env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0
-    plan: free
-```
-
-Créer aussi `.streamlit/config.toml` :
-
-```toml
-[server]
-headless = true
-enableCORS = false
-enableXsrfProtection = false
-
-[theme]
-primaryColor = "#1E6B3C"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#F2F2F2"
-textColor = "#1A1A1A"
-font = "sans serif"
-```
-
-### Étape 3 — Instructions de connexion Render (à afficher à l'utilisateur)
-
-L'utilisateur possède déjà un compte Render. Une fois le code pushé sur GitHub,
-Claude Code doit afficher ces instructions :
-
-```
-DÉPLOIEMENT RENDER — À FAIRE UNE SEULE FOIS MANUELLEMENT :
-
-Vous avez déjà un compte Render — ajoutez simplement un nouveau service :
-
-1. Connectez-vous sur https://render.com
-2. Dans votre dashboard, cliquer "New +" → "Web Service"
-3. Sélectionner "Build and deploy from a Git repository"
-4. Connecter GitHub si ce n'est pas déjà fait, puis sélectionner "Cmoutier/NormAdress"
-5. Render détecte automatiquement render.yaml — vérifier que les paramètres sont corrects
-6. Cliquer "Create Web Service"
-7. Le déploiement démarre automatiquement (3-5 minutes)
-8. Chaque push sur la branche "main" redéploiera l'application automatiquement
-
-Note : le plan gratuit Render permet plusieurs services — pas de conflit avec vos
-services existants. Les 750h/mois de compute sont partagées entre tous vos services.
-
-URL de l'application : https://normadress.onrender.com (ou similaire selon disponibilité)
-```
-
-### Étape 4 — GitHub Actions CI
-
-Créer `.github/workflows/ci.yml` :
-
-```yaml
-name: CI
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - run: pip install -r requirements.txt
-      - run: pytest tests/ -v --cov=cleaner --cov-fail-under=90
+git commit -m "feat: description"
+git push origin main
+# → Render redéploie automatiquement
 ```
 
 ---
 
-## Configuration MCP pour le développement
-
-Claude Code doit créer `.claude/mcp_config.json` :
-
-```json
-{
-  "mcpServers": {
-    "filesystem": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-filesystem",
-        "/chemin/vers/normadress"
-      ]
-    },
-    "github": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-github"],
-      "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
-      }
-    }
-  }
-}
-```
-
-Remplacer `/chemin/vers/normadress` par le chemin absolu réel du projet.
-Le `GITHUB_TOKEN` doit être défini en variable d'environnement locale par l'utilisateur.
-
-Le MCP GitHub permet à Claude Code de : créer des commits, ouvrir des pull requests,
-lire l'état du repo et créer des issues pour tracker les bugs détectés pendant les tests.
-
----
-
-## Structure de projet imposée
+## Structure du projet
 
 ```
 normadress/
-├── app.py                    # Point d'entrée Streamlit
+├── app.py                    # Point d'entrée Streamlit (interface complète)
 ├── render.yaml               # Configuration déploiement Render
-├── requirements.txt          # Dépendances Python avec versions figées
-├── README.md                 # Documentation utilisateur
+├── requirements.txt          # Dépendances Python
+├── favicon.svg               # SVG source du favicon (tableur + baguette magique)
+├── favicon.png               # PNG 128×128 fond transparent (généré depuis favicon.svg)
+├── favicon_src.svg           # SVG intermédiaire (icône seule sans texte)
+├── logo.svg                  # Logo complet NormAdress (icône + texte)
+├── README.md
 ├── .github/
 │   └── workflows/
-│       └── ci.yml            # Pipeline CI GitHub Actions
+│       └── ci.yml
 ├── .streamlit/
-│   └── config.toml           # Thème et config serveur Streamlit
+│   └── config.toml           # Thème vert #1E6B3C
 ├── .claude/
-│   └── mcp_config.json       # Configuration MCP pour développement
+│   └── mcp_config.json
 ├── cleaner/
 │   ├── __init__.py
-│   ├── loader.py             # Chargement et détection structure fichier
-│   ├── mapper.py             # Mapping colonnes → champs standards
-│   ├── rules.py              # Toutes les règles de nettoyage (testables unitairement)
-│   ├── consolidator.py       # Consolidation lignes d'adresse + éclatement multi-contacts
-│   └── exporter.py           # Génération Excel propre + rapport texte
+│   ├── loader.py             # Chargement Excel/CSV, détection encoding/séparateur
+│   ├── mapper.py             # Mapping colonnes → champs standards (synonymes)
+│   ├── rules.py              # Règles de nettoyage (civilité, nom, prénom, CP, ville…)
+│   ├── consolidator.py       # Consolidation adresses + doublons + multi-contacts
+│   ├── coherence.py          # Contrôles de cohérence inter-champs
+│   ├── laposte.py            # Règles La Poste NF Z 10-011 + format_envelope_lines
+│   ├── bat.py                # Génération BAT HTML (Bon À Tirer)
+│   └── exporter.py           # Génération Excel coloré + rapport TXT
 └── tests/
+    ├── __init__.py
     ├── test_rules.py
     ├── test_mapper.py
     ├── test_consolidator.py
+    ├── test_coherence.py
+    ├── test_laposte.py
+    ├── test_bat.py
+    ├── test_loader.py
+    ├── test_exporter.py
+    ├── create_fixtures.py    # Script de génération des fixtures
     └── fixtures/
         ├── demo_standard.xlsx
         ├── demo_multi_contacts.xlsx
@@ -194,144 +91,264 @@ normadress/
 
 ---
 
-## requirements.txt imposé
+## requirements.txt
 
 ```
-streamlit==1.32.0
-pandas==2.2.1
-openpyxl==3.1.2
-pytest==8.1.1
-pytest-cov==5.0.0
-chardet==5.2.0
+streamlit>=1.32.0
+pandas>=2.2.1
+openpyxl>=3.1.2
+pytest>=8.1.1
+pytest-cov>=5.0.0
+chardet>=5.2.0
+Pillow>=10.0.0
+```
+
+> Les versions sont assouplies (`>=`) pour compatibilité avec Render (Python 3.11).
+
+---
+
+## Champs standards de sortie — noms de fusion Word
+
+Ces noms doivent être **EXACTEMENT** respectés :
+
+| Champ | Description | Norme La Poste |
+|---|---|---|
+| `Civilite` | M. / Mme / Mlle | — |
+| `Nom` | Nom de famille en MAJUSCULES | — |
+| `Prenom` | Prénom en Titre | — |
+| `Societe` | Raison sociale | L1 (B2B) |
+| `Adresse1` | N° et libellé de voie | **L4 — obligatoire** |
+| `Adresse2` | BP, lieu-dit, complément distribution | L5 |
+| `Adresse3` | Bâtiment, résidence, étage | L3 |
+| `CodePostal` | 5 chiffres avec zéro initial | L6 (1re partie) |
+| `Ville` | En MAJUSCULES | L6 (2e partie) |
+
+### Structure enveloppe NF Z 10-011 (6 lignes max)
+
+```
+L1 — Raison sociale  OU  Civilité Prénom NOM
+L2 — Contact B2B (À L'ATTENTION DE…)  OU  complément d'identité
+L3 — Adresse3 : bâtiment, résidence, étage
+L4 — Adresse1 : N° et libellé de voie  ← OBLIGATOIRE
+L5 — Adresse2 : BP, CS, TSA, lieu-dit
+L6 — CODE POSTAL  VILLE  (ou CEDEX)
 ```
 
 ---
 
-## Champs standards de sortie (noms de colonnes dans l'Excel exporté)
+## Modules cleaner/ — description détaillée
 
-Ces noms doivent être EXACTEMENT respectés — ce sont les noms de champs de fusion Word clients :
+### loader.py
+- Charge `.xlsx`, `.xls`, `.csv`
+- Détecte l'encoding via `chardet`, le séparateur CSV automatiquement
+- Retourne `{"type", "sheets", "dataframes"}` — ne modifie JAMAIS le fichier source
 
-| Nom colonne Excel | Description |
-|---|---|
-| Civilite | M. / Mme / Mlle |
-| Nom | Nom de famille en MAJUSCULES |
-| Prenom | Prénom en Titre |
-| Societe | Raison sociale |
-| Adresse1 | Première ligne d'adresse (toujours remplie si adresse disponible) |
-| Adresse2 | Deuxième ligne (complément) |
-| Adresse3 | Troisième ligne (bâtiment, résidence…) |
-| CodePostal | 5 chiffres avec zéro initial |
-| Ville | En MAJUSCULES |
+### mapper.py
+- `auto_map(columns)` → dict `{col_source: champ_standard}` via table de synonymes
+- `detect_multi_contacts(mapping)` → détecte les doublons de champ (ex : 2 colonnes "Nom")
+- `normalize_col(col)` → minuscules + suppression accents + suppression non-alphanum
+
+### rules.py
+- `clean_whitespace(value)` — BOM, espaces insécables, zero-width, tabulations, strip
+- `clean_civilite(value)` → `(valeur, ok)` — M./Mme/Mlle + signalement si inconnu
+- `clean_nom(value)` → MAJUSCULES + strip
+- `clean_prenom(value)` → Titre + tirets composés + particules minuscules
+- `clean_codepostal(value)` → `(valeur, ok)` — zéro-padding + validation
+- `clean_ville(value)` → MAJUSCULES
+- `apply_rules(df, options)` → `(df_clean, rapport_lignes)`
+
+### consolidator.py
+- `consolidate_addresses(df)` → décale Adresse1/2/3 si L1 vide — retourne `(df, journal)`
+- `remove_empty_rows(df)` → supprime si Nom ET Adresse1 ET CodePostal tous vides
+- `detect_duplicates(df)` → Nom+CodePostal identiques — SIGNALE, ne supprime PAS
+- `explode_multi_contacts(df, multi_contacts, source_df)` → une ligne par contact
+
+### coherence.py
+Contrôles inter-champs — toutes les fonctions retournent des alertes avec `auto_fixable: bool` :
+
+| Fonction | Action | Auto |
+|---|---|---|
+| `fix_codepostal_float` | `75001.0` → `75001` | ✅ |
+| `detect_civilite_in_nom` | `M. DUPONT` → Civilite=M., Nom=DUPONT | ✅ |
+| `detect_cedex` | `paris cedex 08` → `PARIS CEDEX 08` | ✅ |
+| `detect_nom_prenom_combine` | `DUPONT Jean` avec Prénom vide | ⚠ |
+| `check_societe_contact` | Société + Contact → ordre postal recommandé | ⚠ |
+| `detect_full_address_in_field` | CP détecté dans Adresse1 | ⚠ |
+| `detect_nom_sans_adresse` | Contact sans adresse ni CP | ⚠ |
+| `run_all(df)` | Point d'entrée — exécute tout dans l'ordre | — |
+
+### laposte.py
+Règles La Poste NF Z 10-011 + RNVP :
+
+- `remove_accents(value)` — désaccentuation OCR (É→E, À→A, Ç→C)
+- `normalize_voie(adresse)` — AVENUE→AV, BOULEVARD→BD, IMPASSE→IMP… (table RNVP complète)
+- `clean_address_punctuation(value)` — virgules, parenthèses, points dans adresses
+- `normalize_bp_cs(value)` — B.P.123→BP 123, CS70001→CS 70001, TSA→TSA
+- `format_attention(civ, prenom, nom)` → `"A L'ATTENTION DE M. JEAN DUPONT"`
+- `check_completude(df)` — Identité + Adresse1 + CodePostal + Ville obligatoires
+- `apply_laposte_rules(df, options)` → `(df, alerts)` — point d'entrée
+- `format_envelope_lines(row)` → `list[tuple[str, str]]` — lignes L1 à L6 selon la norme
+
+### bat.py
+Génération du BAT (Bon À Tirer) HTML :
+
+- `generate_bat(df, nom_travail, doublons, consolidation_journal)` → HTML complet
+- Grille 3 colonnes, CSS `@media print`, plis numérotés
+- Badges rouge (doublon) et jaune (adresse réorganisée)
+- Mention NF Z 10-011, imprimable via Ctrl+P → PDF
+
+### exporter.py
+- `export_excel(df, original_df, rapport_lignes, doublons, consolidation_journal)` → bytes
+  - Coloration : vert = corrigé, orange = adresse consolidée, rouge = doublon
+- `export_rapport(...)` → string TXT avec résumé + détail de chaque anomalie
+
+---
+
+## Interface Streamlit — app.py
+
+### Sidebar
+- **Gestion des travaux** : chargement `.json` (restaure mapping + options) + sauvegarde
+- Format JSON : `{version, nom, date, notes, mapping, options, laposte}`
+
+### Flux principal (étapes numérotées)
+
+1. **Import** — `st.file_uploader` (xlsx/xls/csv) + sélection feuille si multi-feuilles
+2. **Mapping** — `st.data_editor` tableau compact : colonne source | exemple | champ cible
+   - Détection auto pré-remplie + priorité au travail chargé
+3. **Multi-contacts** — si détecté : `st.warning` + case à cocher pour éclater
+4. **Options** — expander "Règles de base" + expander "Conformité La Poste NF Z 10-011"
+5. **Lancement** — bouton "Mettre en conformité"
+
+### Pipeline de traitement (dans l'ordre)
+1. Construction DataFrame mappé
+2. Éclatement multi-contacts (si activé)
+3. `run_coherence(df)` — corrections auto + alertes
+4. `apply_rules(df, options)` — nettoyage de base
+5. Mention "À L'ATTENTION DE" (si option activée)
+6. `apply_laposte_rules(df, laposte_options)` — conformité La Poste
+7. `consolidate_addresses(df)` (si option activée)
+8. `remove_empty_rows(df)` (si option activée)
+9. `detect_duplicates(df)`
+
+### Résultats — 3 onglets
+
+**Onglet "Aperçu enveloppes"**
+- Navigation : ⏮ Précédent · n/total · Suivant ⏭ + saut direct au numéro de pli
+- Côte à côte : carte source (données brutes) → enveloppe normalisée (L1-L6)
+- Badge doublon / adresse réorganisée sur le pli courant
+
+**Onglet "Tableau complet"**
+- DataFrame coloré (rouge = doublon, jaune = consolidé)
+
+**Onglet "Alertes et anomalies"**
+- Corrections automatiques (✅), points à vérifier (⚠), alertes La Poste (📮), doublons, anomalies
+
+### Téléchargements
+- `adresses_normalisees.xlsx` — Excel coloré
+- `rapport_normadress.txt` — rapport texte
+- `BAT_YYYYMMDD_HHMM.html` — Bon À Tirer HTML imprimable
 
 ---
 
 ## Règles de nettoyage — spécifications exactes
 
 ### Civilité
-- `M`, `Mr`, `MR`, `Monsieur`, `monsieur`, `M.` → `M.`
-- `Mme`, `MME`, `Madame`, `madame`, `mme`, `mme.` → `Mme`
+- `M`, `Mr`, `MR`, `Monsieur`, `M.`, `Mr.` → `M.`
+- `Mme`, `MME`, `Madame`, `mme`, `mme.` → `Mme`
 - `Mlle`, `MLLE`, `Mademoiselle` → `Mlle`
-- Valeur non reconnue → laisser telle quelle, signaler dans le rapport
+- Non reconnue → laisser, signaler dans le rapport
 
 ### Nom
-- Tout convertir en MAJUSCULES
-- Supprimer les espaces en début/fin
-- Espaces multiples → espace simple
+- MAJUSCULES + strip + espaces multiples → simple
 
 ### Prénom
-- Format Titre : première lettre de chaque mot en majuscule
-- Prénoms composés avec tiret : `jean-pierre` → `Jean-Pierre`
-- Particules `de`, `du`, `de la` restent en minuscules
+- Format Titre : première lettre de chaque mot
+- Tirets : `jean-pierre` → `Jean-Pierre`
+- Particules `de`, `du`, `de la`, `d` → minuscules
 
 ### Code postal
-- Supprimer tous les espaces
-- Valeur 1000–9999 (4 chiffres) → zéro préfixé : `1000` → `01000`
-- Valeur 100–999 (3 chiffres) → deux zéros : `750` → `00750`
-- Déjà 5 chiffres → laisser tel quel
-- Valeur non numérique ou longueur incorrecte → signaler dans le rapport
-
-### Ville
-- Tout convertir en MAJUSCULES
-- Supprimer espaces parasites
+- `75001.0` (float Excel) → `75001` (via `coherence.fix_codepostal_float`)
+- 4 chiffres (1000-9999) → zéro préfixé : `1000` → `01000`
+- 3 chiffres → deux zéros : `750` → `00750`
+- 5 chiffres → laisser tel quel
+- Non numérique → signaler
 
 ### Espaces et caractères
-- Supprimer BOM Unicode (U+FEFF)
-- Espaces insécables (U+00A0) → espace normale
-- U+200B (zero-width space) → supprimer
-- Tabulations et retours à la ligne → espace simple
-- Espaces multiples consécutifs → espace simple
-- Strip début et fin de chaque cellule
+- BOM U+FEFF, espaces insécables U+00A0, zero-width U+200B
+- Tabulations/retours à la ligne → espace
+- Espaces multiples → simple, strip
 
-### Consolidation des lignes d'adresse
-RÈGLE CRITIQUE : Adresse1 ne doit JAMAIS être vide si Adresse2 ou Adresse3 est remplie.
-- Adresse1 vide + Adresse2 remplie → Adresse1←Adresse2, Adresse2←Adresse3, Adresse3←''
-- Adresse1 et 2 vides + Adresse3 remplie → Adresse1←Adresse3, Adresse2/3←''
-- Chaque consolidation tracée dans le rapport (ligne + valeurs avant/après)
-
-### Lignes vides
-- Vide si Nom ET Adresse1 ET CodePostal sont tous vides après nettoyage
-- Supprimées et comptées dans le rapport
+### Consolidation adresses (règle critique)
+- Adresse1 ne doit **JAMAIS** être vide si Adresse2 ou Adresse3 est remplie
+- Adresse1 vide + Adresse2 remplie → décalage : A1←A2, A2←A3, A3←''
+- Adresse1 et A2 vides + A3 remplie → A1←A3, A2/A3←''
 
 ### Doublons
-- Doublon si Nom + CodePostal identiques (après nettoyage, en minuscules)
-- SIGNALÉS uniquement — jamais supprimés automatiquement
-- Listés dans le rapport avec numéro de ligne original
+- Critère : Nom + CodePostal identiques (minuscules)
+- **SIGNALÉS uniquement — jamais supprimés automatiquement**
 
 ---
 
-## Détection automatique du mapping (mapper.py)
+## Contrôles de cohérence inter-champs
 
-```python
-SYNONYMS = {
-    'Civilite': ['civilite', 'civ', 'titre', 'title', 'gender', 'sexe', 'salutation', 'mr/mme'],
-    'Nom': ['nom', 'name', 'lastname', 'last_name', 'nom_famille', 'surname', 'nomdefamille'],
-    'Prenom': ['prenom', 'prénom', 'firstname', 'first_name', 'forename', 'prenoms'],
-    'Societe': ['societe', 'société', 'company', 'entreprise', 'organization', 'raisonsociale', 'raison_sociale'],
-    'Adresse1': ['adresse1', 'adresse', 'address', 'rue', 'street', 'adr1', 'voie', 'ligne1'],
-    'Adresse2': ['adresse2', 'complement', 'address2', 'adr2', 'complement_adresse', 'ligne2'],
-    'Adresse3': ['adresse3', 'address3', 'adr3', 'ligne3', 'batiment', 'immeuble', 'residence'],
-    'CodePostal': ['codepostal', 'code_postal', 'cp', 'zip', 'postal', 'postcode'],
-    'Ville': ['ville', 'city', 'commune', 'town', 'localite'],
+Exécutés **avant** les règles de nettoyage via `coherence.run_all()` :
+
+| Cas | Exemple | Traitement |
+|---|---|---|
+| CP float Excel | `75001.0` | Auto → `75001` |
+| Civilité dans le Nom | `M. DUPONT` | Auto → Civ=M., Nom=DUPONT |
+| CEDEX dans Ville | `paris cedex 08` | Auto → `PARIS CEDEX 08` |
+| Nom + Prénom combinés | `DUPONT Jean` (Prénom vide) | Signalé |
+| Société + Contact | Ordre postal recommandé | Signalé |
+| Adresse complète dans un champ | CP détecté dans Adresse1 | Signalé |
+| Contact sans adresse | Nom renseigné mais Adresse1 et CP vides | Signalé |
+
+---
+
+## Conformité La Poste NF Z 10-011
+
+Options disponibles dans l'interface :
+
+| Option | Par défaut | Description |
+|---|---|---|
+| BP / CS / TSA | ✅ | `B.P.123` → `BP 123` |
+| Ponctuation parasite | ✅ | Virgules, parenthèses dans les adresses |
+| Vérifier la complétude | ✅ | Identité + Adresse1 + CP + Ville obligatoires |
+| À L'ATTENTION DE (B2B) | ⬜ | Société + Contact → mention réglementaire en Adresse2 |
+| Abréviations RNVP | ⬜ | AVENUE→AV, BOULEVARD→BD, IMPASSE→IMP… |
+| Désaccentuation OCR | ⬜ | É→E, À→A, Ç→C (active aussi avec abréviations) |
+
+---
+
+## Gestion des travaux (save/load)
+
+Format JSON sauvegardé :
+```json
+{
+  "version": "1.1",
+  "nom": "Client XYZ — Campagne Mai 2026",
+  "date": "03/04/2026 14:30",
+  "notes": "En attente validation BP...",
+  "mapping": {"Colonne source": "ChampStandard"},
+  "options": {"espaces": true, "civilite": true, ...},
+  "laposte": {"bp_cs": true, "completude": true, ...}
 }
 ```
 
-Normalisation : tout en minuscules, supprimer tout ce qui n'est pas alphanumérique.
-
----
-
-## Gestion des fichiers multi-contacts par ligne
-
-- Détecter si plusieurs colonnes mappent sur le même champ (ex: 2 colonnes "Nom")
-- Afficher un `st.warning` avec confirmation `st.checkbox`
-- Éclater chaque ligne source en N lignes (une par contact)
-- Champs communs (adresse, CP, ville, société) dupliqués sur chaque ligne
-
----
-
-## Interface Streamlit — comportement attendu
-
-1. **Upload** : `st.file_uploader` acceptant xlsx, xls, csv
-2. **Mapping** : tableau éditable colonne source → champ cible (détection auto pré-remplie)
-3. **Alerte multi-contacts** : `st.warning` + confirmation si détecté
-4. **Options** : cases à cocher pour chaque règle (toutes cochées par défaut)
-5. **Lancement** : bouton "Mettre en conformité"
-6. **Résultats** :
-   - Métriques : lignes importées / exportées / doublons / supprimées
-   - Tableau avec coloration (vert = corrigé, orange = adresse consolidée, rouge = doublon)
-   - Liste détaillée des doublons
-   - Bouton téléchargement Excel propre
-   - Bouton téléchargement rapport TXT
+Au rechargement : pré-remplit le tableau de mapping + toutes les options.
+Priorité : travail chargé > détection automatique.
 
 ---
 
 ## Exigences de qualité
 
-- Couverture minimale : 90% sur `rules.py` et `consolidator.py`
+- Couverture tests : **≥ 90%** sur le package `cleaner/` (actuellement ~95%)
+- 228 tests passent (pytest)
 - Aucune exception non gérée → toujours `st.error()` avec message clair
 - Fichiers multi-feuilles → `st.selectbox` pour choisir la feuille
 - CSV → détection automatique du séparateur via `chardet`
 - Taille max recommandée : 50 000 lignes → `st.warning` au-delà
-- Ne jamais modifier le fichier source — copie en mémoire uniquement
+- Ne **jamais** modifier le fichier source — copie en mémoire uniquement
 
 ---
 
@@ -347,6 +364,29 @@ streamlit run app.py
 # Tests
 pytest tests/ -v --cov=cleaner --cov-report=term-missing
 pytest tests/ --cov=cleaner --cov-fail-under=90
+
+# Régénérer les fixtures de test
+python tests/create_fixtures.py
+
+# Régénérer le favicon depuis favicon.svg
+python -c "
+from svglib.svglib import svg2rlg
+from reportlab.graphics import renderPM
+from PIL import Image
+import io
+drawing = svg2rlg('favicon.svg')
+scale = 128 / max(drawing.width, drawing.height)
+drawing.width *= scale; drawing.height *= scale
+drawing.transform = (scale, 0, 0, scale, 0, 0)
+buf = io.BytesIO()
+renderPM.drawToFile(drawing, buf, fmt='PNG')
+buf.seek(0)
+img = Image.open(buf).convert('RGBA')
+data = img.getdata()
+new_data = [(255,255,255,0) if r>240 and g>240 and b>240 else (r,g,b,a) for r,g,b,a in data]
+img.putdata(new_data)
+img.save('favicon.png')
+"
 
 # Déploiement
 git add .
@@ -364,4 +404,6 @@ git push origin main
 - Ne pas modifier les fichiers sources — copie en mémoire uniquement
 - Ne pas utiliser xlrd pour les .xlsx (déprécié) — openpyxl uniquement
 - Ne pas hardcoder les chemins de fichiers
-- Ne pas ajouter de base de données en v1 — application stateless
+- Ne pas ajouter de base de données — application stateless
+- Ne pas fixer les versions de dépendances avec `==` (utiliser `>=` pour compatibilité Render)
+- Ne pas supprimer le favicon.svg ni le logo.svg — ils sont la source des assets visuels
