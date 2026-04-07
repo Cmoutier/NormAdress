@@ -132,7 +132,8 @@ if submitted:
             st.session_state["fichier_word_nom"] = fichier_word.name
         st.session_state["parametres"] = parametres
 
-        st.session_state["target_page"] = "mapping"
+        st.session_state["dossier_id"] = dossier_id
+        st.session_state["target_page"] = "en_cours"
         st.rerun()
 
     except Exception as e:

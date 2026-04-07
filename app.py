@@ -9,6 +9,25 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------------------
+# Objets st.Page créés une seule fois (utilisés pour switch_page)
+# ---------------------------------------------------------------------------
+
+P_ACCUEIL        = None   # sera défini plus bas (fonction)
+P_NOUVEAU        = st.Page("pages/01_nouveau_dossier.py", title="Nouveau dossier",       icon="📁")
+P_MAPPING        = st.Page("pages/02_mapping.py",         title="Mapping des colonnes",  icon="🔗")
+P_DETECTION      = st.Page("pages/03_detection.py",       title="Détection pro / part.", icon="🔍")
+P_COMPOSITION    = st.Page("pages/04_composition.py",     title="Composition AFNOR",     icon="✉️")
+P_BAT            = st.Page("pages/05_bat.py",             title="BAT — Validation",      icon="📄")
+P_EXPORT         = st.Page("pages/06_export.py",          title="Export final",          icon="📤")
+
+STATUT_PAGE = {
+    "en_cours":  P_MAPPING,
+    "a_valider": P_BAT,
+    "valide":    P_EXPORT,
+    "exporte":   P_EXPORT,
+}
+
+# ---------------------------------------------------------------------------
 # Indicateur dossier actif + bouton fermer (sidebar)
 # ---------------------------------------------------------------------------
 
@@ -16,11 +35,14 @@ dossier_id = st.session_state.get("dossier_id")
 
 if dossier_id:
     with st.sidebar:
-        from core.db import get_dossier as _get
-        _d = _get(dossier_id)
-        if _d:
-            st.caption("Dossier actif")
-            st.markdown(f"**{_d['nom']}**")
+        try:
+            from core.db import get_dossier as _get
+            _d = _get(dossier_id)
+            if _d:
+                st.caption("Dossier actif")
+                st.markdown(f"**{_d['nom']}**")
+        except Exception:
+            pass
         if st.button("✕ Fermer le dossier", use_container_width=True):
             for k in ("dossier_id", "df_source", "df_mappe", "mapping",
                       "adresses", "fichier_excel", "fichier_word",
@@ -45,7 +67,7 @@ def page_tableau_de_bord():
         st.subheader("Dossiers")
     with col_btn:
         if st.button("+ Nouveau dossier", type="primary", use_container_width=True):
-            st.switch_page("nouveau-dossier")
+            st.switch_page(P_NOUVEAU)
 
     try:
         dossiers = lister_dossiers()
@@ -62,12 +84,6 @@ def page_tableau_de_bord():
         "a_valider": "🔵 À valider",
         "valide":    "🟢 Validé",
         "exporte":   "✅ Exporté",
-    }
-    STATUT_PAGE = {
-        "en_cours":  "mapping",
-        "a_valider": "bat",
-        "valide":    "export",
-        "exporte":   "export",
     }
 
     for d in dossiers:
@@ -94,9 +110,7 @@ def page_tableau_de_bord():
                               "fichier_excel", "fichier_word"):
                         st.session_state.pop(k, None)
                     st.session_state["dossier_id"] = d["id"]
-                    st.session_state["target_page"] = STATUT_PAGE.get(
-                        d["statut"], "mapping"
-                    )
+                    st.session_state["target_page"] = d["statut"]
                     st.rerun()
             with c5:
                 if st.button("Dupliquer", key=f"dup_{d['id']}",
@@ -105,8 +119,7 @@ def page_tableau_de_bord():
                               "adresses", "fichier_excel", "fichier_word"):
                         st.session_state.pop(k, None)
                     st.session_state["duplication_source_id"] = d["id"]
-                    st.session_state["target_page"] = "nouveau-dossier"
-                    st.rerun()
+                    st.switch_page(P_NOUVEAU)
 
 
 # ---------------------------------------------------------------------------
@@ -115,30 +128,22 @@ def page_tableau_de_bord():
 
 dossier_id = st.session_state.get("dossier_id")
 
-pages_accueil = [
-    st.Page(page_tableau_de_bord, title="Tableau de bord",
-            icon="🏠", default=True, url_path="accueil"),
-    st.Page("pages/01_nouveau_dossier.py", title="Nouveau dossier",
-            icon="📁", url_path="nouveau-dossier"),
-]
+P_ACCUEIL = st.Page(page_tableau_de_bord, title="Tableau de bord",
+                    icon="🏠", default=True)
 
-nav = {"": pages_accueil}
+nav = {"": [P_ACCUEIL, P_NOUVEAU]}
 
 if dossier_id:
     nav["Dossier en cours"] = [
-        st.Page("pages/02_mapping.py",     title="Mapping des colonnes",  icon="🔗", url_path="mapping"),
-        st.Page("pages/03_detection.py",   title="Détection pro / part.", icon="🔍", url_path="detection"),
-        st.Page("pages/04_composition.py", title="Composition AFNOR",     icon="✉️", url_path="composition"),
-        st.Page("pages/05_bat.py",         title="BAT — Validation",      icon="📄", url_path="bat"),
-        st.Page("pages/06_export.py",      title="Export final",          icon="📤", url_path="export"),
+        P_MAPPING, P_DETECTION, P_COMPOSITION, P_BAT, P_EXPORT
     ]
 
 pg = st.navigation(nav)
 
-# Redirection différée : exécutée APRÈS que la navigation est construite,
-# donc les pages dossier sont déjà enregistrées quand on switch.
-_target = st.session_state.pop("target_page", None)
-if _target:
-    st.switch_page(_target)
+# Redirection différée : APRÈS que st.navigation() a enregistré toutes les pages.
+_target_statut = st.session_state.pop("target_page", None)
+if _target_statut and dossier_id:
+    _page = STATUT_PAGE.get(_target_statut, P_MAPPING)
+    st.switch_page(_page)
 
 pg.run()
