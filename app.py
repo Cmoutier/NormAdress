@@ -9,6 +9,27 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------------------
+# Indicateur dossier actif + bouton fermer (sidebar)
+# ---------------------------------------------------------------------------
+
+dossier_id = st.session_state.get("dossier_id")
+
+if dossier_id:
+    with st.sidebar:
+        from core.db import get_dossier as _get
+        _d = _get(dossier_id)
+        if _d:
+            st.caption("Dossier actif")
+            st.markdown(f"**{_d['nom']}**")
+        if st.button("✕ Fermer le dossier", use_container_width=True):
+            for k in ("dossier_id", "df_source", "df_mappe", "mapping",
+                      "adresses", "fichier_excel", "fichier_word",
+                      "fichier_excel_nom", "fichier_word_nom", "parametres"):
+                st.session_state.pop(k, None)
+            st.rerun()
+        st.divider()
+
+# ---------------------------------------------------------------------------
 # Tableau de bord (page par défaut)
 # ---------------------------------------------------------------------------
 
@@ -51,7 +72,7 @@ def page_tableau_de_bord():
 
     for d in dossiers:
         with st.container(border=True):
-            c1, c2, c3, c4 = st.columns([4, 2, 2, 2])
+            c1, c2, c3, c4, c5 = st.columns([4, 2, 2, 1, 1])
             with c1:
                 st.markdown(f"**{d['nom']}**")
                 if d.get("client"):
@@ -70,11 +91,19 @@ def page_tableau_de_bord():
                 if st.button("Reprendre", key=f"open_{d['id']}",
                              use_container_width=True):
                     st.session_state["dossier_id"] = d["id"]
-                    st.session_state["df_source"] = None
-                    st.session_state["df_mappe"] = None
-                    st.session_state["mapping"] = None
-                    st.session_state["adresses"] = None
+                    for k in ("df_source", "df_mappe", "mapping", "adresses",
+                              "fichier_excel", "fichier_word"):
+                        st.session_state.pop(k, None)
                     st.switch_page(STATUT_PAGE.get(d["statut"], "mapping"))
+            with c5:
+                if st.button("Dupliquer", key=f"dup_{d['id']}",
+                             use_container_width=True):
+                    st.session_state["duplication_source_id"] = d["id"]
+                    # Fermer le dossier actif si différent
+                    for k in ("dossier_id", "df_source", "df_mappe", "mapping",
+                              "adresses", "fichier_excel", "fichier_word"):
+                        st.session_state.pop(k, None)
+                    st.switch_page("nouveau-dossier")
 
 
 # ---------------------------------------------------------------------------
