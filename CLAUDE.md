@@ -652,25 +652,50 @@ python-dotenv==1.0.1
 
 ---
 
-## Ordre de développement recommandé
+## État du développement (07/04/2026)
+
+### Terminé ✅
 
 ```
-1.  db.py              → connexion Supabase + CRUD de base + tests
-2.  cleaner.py         → toutes les règles de nettoyage + tests (dont CP flottant)
-3.  detector.py        → détection pro/part + mode BAL + tests
-4.  composer.py        → 6 lignes AFNOR + Formule (tous modes) + tests
-5.  validator.py       → alertes qualité + tests
-6.  mapper.py          → mapping + synonymes + jointure fichiers + tests
-7.  pages/01 + app.py  → tableau de bord + création dossier
-8.  pages/02           → mapping drag & drop
-9.  pages/03           → détection + révision
-10. pages/04           → composition + édition
-11. pdf_generator.py   → PDF BAT
-12. pages/05           → BAT + workflow validation
-13. word_injector.py   → injection champs fusion Word
-14. exporter.py        → export Excel formaté
-15. pages/06           → export final
-16. render.yaml + push → déploiement
+✅  core/db.py              Connexion Supabase + CRUD dossiers/adresses/mappings
+✅  core/cleaner.py         Nettoyage complet — whitespace, civilités, noms, CP, ville
+✅  core/detector.py        Détection pro/part + mode BAL interne
+✅  core/composer.py        6 lignes AFNOR + Formule (tous modes + multi-contacts)
+✅  core/validator.py       8 codes d'alertes qualité AFNOR
+✅  core/mapper.py          Mapping synonymes + auto_map + construire_df_mappe
+✅  core/pdf_generator.py   PDF BAT grille 2×2, lignes longues surlignées orange
+✅  core/word_injector.py   Injection MERGEFIELD Word (marqueurs {{Ln}} ou fin de doc)
+✅  app.py                  Tableau de bord dossiers avec statuts colorés
+✅  pages/01_nouveau_dossier.py  Création dossier + upload Excel/Word + paramètres
+✅  pages/02_mapping.py     Mapping colonnes + détection mode BAL auto
+✅  pages/03_detection.py   Révision pro/part ligne par ligne
+✅  pages/04_composition.py Composition AFNOR + édition manuelle + sauvegarde en base
+✅  pages/05_bat.py         Génération PDF + workflow validation client
+✅  pages/06_export.py      Export Excel coloré + Word avec champs de fusion
+✅  tests/test_cleaner.py   18 tests — 100% pass
+✅  tests/test_detector.py  8 tests — 100% pass
+✅  tests/test_composer.py  12 tests — 100% pass
+✅  tests/test_validator.py 6 tests — 100% pass
+                            → Total : 58 tests, 0 échec
+```
+
+### À faire / Prochaines étapes
+
+```
+⏳  Tables Supabase         À créer manuellement via SQL Editor (SQL dans section dédiée)
+⏳  Render env vars         SUPABASE_URL + SUPABASE_KEY à configurer dans Render
+⏳  cleaner/ (legacy)       Ancien package v3 — toujours présent, peut être supprimé
+⏳  tests/fixtures          Fixtures réelles présentes mais non versionnées (.gitignore)
+⏳  Drag & drop mapping     streamlit-sortables pas encore intégré dans pages/02
+```
+
+### Notes environnement local
+
+**Python 3.14 + Windows** : `supabase>=2.28` tire `storage3` qui tire `pyiceberg`,
+lequel nécessite Visual Studio Build Tools. L'app tourne sans problème sur Render
+(Python 3.11, Linux). Pour tester localement sans supabase, lancer uniquement :
+```bash
+pytest tests/test_cleaner.py tests/test_detector.py tests/test_composer.py tests/test_validator.py
 ```
 
 ---
