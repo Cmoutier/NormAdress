@@ -19,4 +19,4 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install -r requirements.txt
-      - run: pytest tests/ -v --cov=core --cov-fail-under=85
+      - run: pytest tests/ -v --cov=core --cov-report=term-missing --cov-fail-under=85

@@ -1,0 +1,5 @@
+[run]
+omit =
+    core/db.py
+    core/pdf_generator.py
+    core/word_injector.py

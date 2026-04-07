@@ -99,3 +99,55 @@ class TestVille:
 
     def test_cedex(self):
         assert clean_ville("paris cedex 08") == "PARIS CEDEX 08"
+
+
+class TestCodePostalEdgeCases:
+    def test_2_chiffres(self):
+        val, ok = clean_codepostal("75")
+        assert val == "00075"
+        assert ok is True  # padde à 5 chiffres → valide
+
+    def test_1_chiffre(self):
+        val, ok = clean_codepostal("7")
+        assert val == "00007"
+        assert ok is True  # padde à 5 chiffres → valide
+
+    def test_6_chiffres(self):
+        val, ok = clean_codepostal("750001")
+        assert ok is False  # trop long → invalide
+
+
+class TestCleanRow:
+    from core.cleaner import clean_row
+
+    def test_row_complet(self):
+        from core.cleaner import clean_row
+        row = {
+            "civilite_1": "Monsieur", "nom_1": "dupont", "prenom_1": "jean",
+            "code_postal": "75001.0", "ville": "paris",
+            "societe": "  SYNERPA  ",
+        }
+        out = clean_row(row)
+        assert out["civilite_1"] == "M."
+        assert out["nom_1"] == "DUPONT"
+        assert out["prenom_1"] == "Jean"
+        assert out["code_postal"] == "75001"
+        assert out["ville"] == "PARIS"
+        assert out["societe"] == "SYNERPA"
+
+    def test_row_multi_contacts(self):
+        from core.cleaner import clean_row
+        row = {
+            "civilite_2": "Mme", "nom_2": "martin", "prenom_2": "marie",
+            "civilite_3": "M.", "nom_3": "durand", "prenom_3": "pierre",
+        }
+        out = clean_row(row)
+        assert out["nom_2"] == "MARTIN"
+        assert out["prenom_2"] == "Marie"
+        assert out["nom_3"] == "DURAND"
+
+    def test_row_champs_vides(self):
+        from core.cleaner import clean_row
+        out = clean_row({"nom_1": "", "ville": ""})
+        assert out["nom_1"] == ""
+        assert out["ville"] == ""
