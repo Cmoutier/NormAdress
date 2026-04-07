@@ -16,7 +16,7 @@ from cleaner.laposte import apply_laposte_rules, format_attention, format_envelo
 from cleaner.bat import generate_bat
 from cleaner.exporter import export_excel, export_rapport
 
-st.set_page_config(page_title="NormAdress", page_icon="📬", layout="wide")
+st.set_page_config(page_title="NormAdress", page_icon="favicon.png", layout="wide")
 
 # ---------------------------------------------------------------------------
 # Helpers visuels
