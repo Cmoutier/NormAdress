@@ -44,10 +44,18 @@ class TestValidateur:
         assert "CP_INVALIDE_FR" in codes
 
     def test_adresse_etrangere(self):
-        a = {"L1": "M. Dupont", "L4": "12 rue", "L6": "10001 NEW YORK USA"}
+        a = {"L1": "M. Dupont", "L4": "12 rue", "L6": "10001 NEW YORK",
+             "pays": "USA"}
         alertes = valider_adresse(a, mode="postal")
         codes = [al["code"] for al in alertes]
         assert "ETRANGER" in codes
+
+    def test_adresse_france_pas_etranger(self):
+        a = {"L1": "M. DUPONT", "L4": "8 PLACE LEON MEYER",
+             "L6": "76600 LE HAVRE", "pays": ""}
+        alertes = valider_adresse(a, mode="postal")
+        codes = [al["code"] for al in alertes]
+        assert "ETRANGER" not in codes
 
     def test_l1_vide(self):
         a = {"L1": "", "L4": "12 rue", "L6": "75001 PARIS"}

@@ -104,6 +104,42 @@ CHAMPS_OPTIONS = ["(ignorer)"] + CHAMPS_CIBLES
 st.markdown("### Association colonnes → champs AFNOR")
 st.caption("Vérifiez et ajustez le mapping détecté automatiquement.")
 
+with st.expander("ℹ️ À quoi correspondent les champs AFNOR ?"):
+    st.markdown("""
+**Structure d'une enveloppe AFNOR (norme NF Z 10-011) — 6 lignes max :**
+
+| Ligne | Champ(s) | Rôle |
+|-------|----------|------|
+| **L1** | `societe` *ou* `civilite_1 + nom_1 + prenom_1` | Destinataire principal |
+| **L2** | `identite_2` (B2B) *ou* complément d'identité | Contact au sein de la société |
+| **L3** | `adresse_comp_int` | Bâtiment, résidence, étage, appartement |
+| **L4** | `adresse_voie` ← **obligatoire** | Numéro et libellé de la voie (ex : 12 RUE DE LA PAIX) |
+| **L5** | `adresse_comp_ext` / `adresse_lieu_dit` | BP, CS, TSA, lieu-dit |
+| **L6** | `code_postal` + `ville` | Code postal 5 chiffres + ville en majuscules |
+
+---
+
+**Identité du destinataire :**
+- `civilite_1 / nom_1 / prenom_1` — particulier : M. Jean DUPONT
+- `identite_1` — identité complète dans une seule colonne (ex : "Jean DUPONT")
+- `societe` — raison sociale (B2B) ; prend la place de L1
+- `civilite_2 / nom_2 / prenom_2` — 2e contact dans la même enveloppe (B2B)
+
+**Adresse :**
+- `adresse_voie` — **L4, obligatoire** — numéro + libellé de voie
+- `adresse_comp_int` — bâtiment, résidence, étage *(L3)*
+- `adresse_comp_ext` — BP, CS, TSA *(L5)*
+- `adresse_lieu_dit` — lieu-dit, hameau *(L5 si comp_ext vide)*
+- `code_postal` — 5 chiffres (ex : 75001, 01000)
+- `ville` — commune (sera mise en majuscules)
+- `pays` — uniquement si adresses étrangères
+
+**Autre :**
+- `id_client` — référence client (conservée dans l'export, non envoyée)
+- `formule_source` — formule de politesse déjà rédigée dans le fichier source
+""")
+
+
 mapping_result: dict[str, str] = {}
 nb_cols = 3
 cols = st.columns(nb_cols)

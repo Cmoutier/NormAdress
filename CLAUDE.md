@@ -659,9 +659,13 @@ python-dotenv==1.0.1
 ```
 ✅  core/db.py              Connexion Supabase + CRUD dossiers/adresses/mappings
 ✅  core/cleaner.py         Nettoyage complet — whitespace, civilités, noms, CP, ville
+                            PARTICULES = {de, du, des, la, le, les, d} — fix "de la Tour"
 ✅  core/detector.py        Détection pro/part + mode BAL interne
 ✅  core/composer.py        6 lignes AFNOR + Formule (tous modes + multi-contacts)
+                            Stocke le champ `pays` dans l'adresse pour le validateur
 ✅  core/validator.py       8 codes d'alertes qualité AFNOR
+                            ETRANGER : déclenché uniquement si champ `pays` renseigné
+                            et non français — pas de heuristique sur le nombre de mots en L6
 ✅  core/mapper.py          Mapping synonymes + auto_map + construire_df_mappe
 ✅  core/pdf_generator.py   PDF BAT grille 2×2, lignes longues surlignées orange
 ✅  core/word_injector.py   Injection MERGEFIELD Word (marqueurs {{Ln}} ou fin de doc)
@@ -669,8 +673,15 @@ python-dotenv==1.0.1
                             + bouton Dupliquer + bouton Fermer le dossier
 ✅  pages/01_nouveau_dossier.py  Création dossier + pré-remplissage si duplication
 ✅  pages/02_mapping.py     Mapping colonnes + détection mode BAL auto
+                            + expander aide "À quoi correspondent les champs AFNOR ?"
+                            avec tableau L1-L6 et description de chaque champ
 ✅  pages/03_detection.py   Révision pro/part ligne par ligne
+                            + pagination 50 lignes par page
+                            + filtre radio pré-sélectionné sur "inconnu" si existants
 ✅  pages/04_composition.py Composition AFNOR + édition manuelle + sauvegarde en base
+                            + filtres cliquables 🔴 Bloquantes / ⚠️ Avertissements / ✅ OK
+                            + pagination 50 lignes par page
+                            + revalidation après correction manuelle
 ✅  pages/05_bat.py         Génération PDF + workflow validation client
 ✅  pages/06_export.py      Export Excel coloré + Word avec champs de fusion
 ✅  Tables Supabase         Créées (dossiers, adresses, mappings)
@@ -679,9 +690,9 @@ python-dotenv==1.0.1
 ✅  tests/test_cleaner.py   28 tests — 100% pass
 ✅  tests/test_detector.py   8 tests — 100% pass
 ✅  tests/test_composer.py  12 tests — 100% pass
-✅  tests/test_validator.py  9 tests — 100% pass
+✅  tests/test_validator.py 10 tests — 100% pass (dont test_adresse_france_pas_etranger)
 ✅  tests/test_mapper.py    12 tests — 100% pass
-                            → Total : 80 tests, 0 échec, couverture 94%
+                            → Total : 81 tests, 0 échec, couverture 94%
 ✅  .coveragerc             Exclut db/pdf_generator/word_injector
 ✅  .github/workflows/ci.yml CI corrigé : cov=core, seuil 85%, Node.js 24
 ```

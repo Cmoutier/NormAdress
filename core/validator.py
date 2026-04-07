@@ -1,5 +1,6 @@
 """Contrôles qualité AFNOR XPZ-10-11."""
 from __future__ import annotations
+import re
 
 LONGUEUR_MAX = 38  # norme AFNOR
 
@@ -7,7 +8,7 @@ LONGUEUR_MAX = 38  # norme AFNOR
 def valider_adresse(adresse: dict, mode: str = "postal") -> list[dict]:
     """
     Valide les 6 lignes AFNOR et retourne une liste d'alertes.
-    adresse : dict avec clés L1 à L6 + Formule
+    adresse : dict avec clés L1 à L6 + Formule (+ pays optionnel)
     mode    : 'postal' | 'bal_interne'
     """
     alertes = []
@@ -52,28 +53,24 @@ def valider_adresse(adresse: dict, mode: str = "postal") -> list[dict]:
             "bloquant": True,
         })
     else:
-        # Valider CP français (5 chiffres au début de L6)
-        import re
         m = re.match(r"^(\d{5})", l6)
         if not m:
             alertes.append({
                 "code": "CP_INVALIDE_FR",
                 "ligne": "L6",
-                "message": f"CP '{l6[:10]}' non conforme (5 chiffres)",
+                "message": f"CP '{l6[:10]}' non conforme (5 chiffres attendus)",
                 "bloquant": False,
             })
-        # Adresse étrangère
-        elif m and len(l6.split()) > 2:
-            parts = l6.split()
-            # Si le dernier mot ressemble à un pays étranger
-            known_fr = {"FRANCE", "CEDEX"}
-            if parts[-1].upper() not in known_fr and not parts[-1].isdigit():
-                alertes.append({
-                    "code": "ETRANGER",
-                    "ligne": "L6",
-                    "message": "Adresse étrangère — vérification recommandée",
-                    "bloquant": False,
-                })
+
+        # Adresse étrangère : uniquement si le champ pays est renseigné et non français
+        pays = (adresse.get("pays") or "").strip().upper()
+        if pays and pays not in ("FRANCE", "FR", ""):
+            alertes.append({
+                "code": "ETRANGER",
+                "ligne": "L6",
+                "message": f"Adresse étrangère ({pays}) — vérification recommandée",
+                "bloquant": False,
+            })
 
     # L1 vide
     l1 = (adresse.get("L1") or "").strip()
