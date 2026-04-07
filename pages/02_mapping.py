@@ -150,7 +150,7 @@ if mode_detecte == "bal_interne":
             mettre_a_jour_dossier(dossier_id, mode_distribution="bal_interne")
             st.session_state["mapping"] = mapping_result
             st.session_state["mode_distribution"] = "bal_interne"
-            st.switch_page("views/03_detection.py")
+            st.switch_page("pages/03_detection.py")
     with col_b:
         st.info("Non, ajustez le mapping ci-dessus pour inclure une colonne adresse.")
 else:
@@ -159,4 +159,4 @@ else:
         mettre_a_jour_dossier(dossier_id, mode_distribution="postal")
         st.session_state["mapping"] = mapping_result
         st.session_state["mode_distribution"] = "postal"
-        st.switch_page("views/03_detection.py")
+        st.switch_page("pages/03_detection.py")

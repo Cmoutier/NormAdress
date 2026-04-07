@@ -8,23 +8,19 @@ st.set_page_config(
     layout="wide",
 )
 
-# ---------------------------------------------------------------------------
-# Objets st.Page créés une seule fois (utilisés pour switch_page)
-# ---------------------------------------------------------------------------
-
-P_ACCUEIL        = None   # sera défini plus bas (fonction)
-P_NOUVEAU        = st.Page("views/01_nouveau_dossier.py", title="Nouveau dossier",       icon="📁")
-P_MAPPING        = st.Page("views/02_mapping.py",         title="Mapping des colonnes",  icon="🔗")
-P_DETECTION      = st.Page("views/03_detection.py",       title="Détection pro / part.", icon="🔍")
-P_COMPOSITION    = st.Page("views/04_composition.py",     title="Composition AFNOR",     icon="✉️")
-P_BAT            = st.Page("views/05_bat.py",             title="BAT — Validation",      icon="📄")
-P_EXPORT         = st.Page("views/06_export.py",          title="Export final",          icon="📤")
+# Chemins de fichiers — seule forme acceptée par st.switch_page()
+PAGE_NOUVEAU     = "pages/01_nouveau_dossier.py"
+PAGE_MAPPING     = "pages/02_mapping.py"
+PAGE_DETECTION   = "pages/03_detection.py"
+PAGE_COMPOSITION = "pages/04_composition.py"
+PAGE_BAT         = "pages/05_bat.py"
+PAGE_EXPORT      = "pages/06_export.py"
 
 STATUT_PAGE = {
-    "en_cours":  P_MAPPING,
-    "a_valider": P_BAT,
-    "valide":    P_EXPORT,
-    "exporte":   P_EXPORT,
+    "en_cours":  PAGE_MAPPING,
+    "a_valider": PAGE_BAT,
+    "valide":    PAGE_EXPORT,
+    "exporte":   PAGE_EXPORT,
 }
 
 # ---------------------------------------------------------------------------
@@ -67,7 +63,7 @@ def page_tableau_de_bord():
         st.subheader("Dossiers")
     with col_btn:
         if st.button("+ Nouveau dossier", type="primary", use_container_width=True):
-            st.switch_page(P_NOUVEAU)
+            st.switch_page(PAGE_NOUVEAU)
 
     try:
         dossiers = lister_dossiers()
@@ -119,31 +115,36 @@ def page_tableau_de_bord():
                               "adresses", "fichier_excel", "fichier_word"):
                         st.session_state.pop(k, None)
                     st.session_state["duplication_source_id"] = d["id"]
-                    st.switch_page(P_NOUVEAU)
-
+                    st.switch_page(PAGE_NOUVEAU)
 
 # ---------------------------------------------------------------------------
 # Navigation conditionnelle
+# st.navigation() supprime l'auto-navigation générée par pages/
 # ---------------------------------------------------------------------------
 
 dossier_id = st.session_state.get("dossier_id")
 
-P_ACCUEIL = st.Page(page_tableau_de_bord, title="Tableau de bord",
-                    icon="🏠", default=True)
+nav_accueil = [
+    st.Page(page_tableau_de_bord,  title="Tableau de bord",       icon="🏠", default=True),
+    st.Page(PAGE_NOUVEAU,          title="Nouveau dossier",        icon="📁"),
+]
 
-nav = {"": [P_ACCUEIL, P_NOUVEAU]}
+nav = {"": nav_accueil}
 
 if dossier_id:
     nav["Dossier en cours"] = [
-        P_MAPPING, P_DETECTION, P_COMPOSITION, P_BAT, P_EXPORT
+        st.Page(PAGE_MAPPING,     title="Mapping des colonnes",  icon="🔗"),
+        st.Page(PAGE_DETECTION,   title="Détection pro / part.", icon="🔍"),
+        st.Page(PAGE_COMPOSITION, title="Composition AFNOR",     icon="✉️"),
+        st.Page(PAGE_BAT,         title="BAT — Validation",      icon="📄"),
+        st.Page(PAGE_EXPORT,      title="Export final",          icon="📤"),
     ]
 
 pg = st.navigation(nav)
 
-# Redirection différée : APRÈS que st.navigation() a enregistré toutes les pages.
-_target_statut = st.session_state.pop("target_page", None)
-if _target_statut and dossier_id:
-    _page = STATUT_PAGE.get(_target_statut, P_MAPPING)
-    st.switch_page(_page)
+# Redirection différée : switch_page APRÈS que la navigation est construite.
+_statut = st.session_state.pop("target_page", None)
+if _statut and dossier_id:
+    st.switch_page(STATUT_PAGE.get(_statut, PAGE_MAPPING))
 
 pg.run()
