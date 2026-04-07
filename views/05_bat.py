@@ -26,7 +26,7 @@ if not adresses:
 if not adresses:
     st.error("Aucune adresse composée. Reprenez depuis l'étape Composition.")
     if st.button("Retour Composition"):
-        st.switch_page("pages/04_composition.py")
+        st.switch_page("views/04_composition.py")
     st.stop()
 
 # ---------------------------------------------------------------------------
@@ -98,4 +98,4 @@ with col2:
 if dossier["statut"] == "valide":
     st.markdown("---")
     if st.button("Passer à l'export →", type="primary"):
-        st.switch_page("pages/06_export.py")
+        st.switch_page("views/06_export.py")

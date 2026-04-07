@@ -13,12 +13,12 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 
 P_ACCUEIL        = None   # sera défini plus bas (fonction)
-P_NOUVEAU        = st.Page("pages/01_nouveau_dossier.py", title="Nouveau dossier",       icon="📁")
-P_MAPPING        = st.Page("pages/02_mapping.py",         title="Mapping des colonnes",  icon="🔗")
-P_DETECTION      = st.Page("pages/03_detection.py",       title="Détection pro / part.", icon="🔍")
-P_COMPOSITION    = st.Page("pages/04_composition.py",     title="Composition AFNOR",     icon="✉️")
-P_BAT            = st.Page("pages/05_bat.py",             title="BAT — Validation",      icon="📄")
-P_EXPORT         = st.Page("pages/06_export.py",          title="Export final",          icon="📤")
+P_NOUVEAU        = st.Page("views/01_nouveau_dossier.py", title="Nouveau dossier",       icon="📁")
+P_MAPPING        = st.Page("views/02_mapping.py",         title="Mapping des colonnes",  icon="🔗")
+P_DETECTION      = st.Page("views/03_detection.py",       title="Détection pro / part.", icon="🔍")
+P_COMPOSITION    = st.Page("views/04_composition.py",     title="Composition AFNOR",     icon="✉️")
+P_BAT            = st.Page("views/05_bat.py",             title="BAT — Validation",      icon="📄")
+P_EXPORT         = st.Page("views/06_export.py",          title="Export final",          icon="📤")
 
 STATUT_PAGE = {
     "en_cours":  P_MAPPING,

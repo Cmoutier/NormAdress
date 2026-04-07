@@ -21,7 +21,7 @@ df: pd.DataFrame = st.session_state.get("df_mappe")
 if df is None:
     st.error("Données manquantes. Reprenez depuis l'étape Détection.")
     if st.button("Retour"):
-        st.switch_page("pages/03_detection.py")
+        st.switch_page("views/03_detection.py")
     st.stop()
 
 st.markdown(f"**Dossier :** {dossier['nom']}")
@@ -139,4 +139,4 @@ if st.button("Sauvegarder et générer le BAT →", type="primary"):
     with st.spinner("Sauvegarde en base..."):
         sauvegarder_adresses(dossier_id, adresses)
     st.session_state["adresses"] = adresses
-    st.switch_page("pages/05_bat.py")
+    st.switch_page("views/05_bat.py")
