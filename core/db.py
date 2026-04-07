@@ -95,9 +95,6 @@ def sauvegarder_adresses(dossier_id: str, adresses: list[dict]) -> None:
     if not adresses:
         return
     rows = []
-    def _trunc(v: str, n: int = 38) -> str:
-        return (v or "")[:n]
-
     for i, a in enumerate(adresses):
         rows.append({
             "dossier_id": dossier_id,
@@ -105,12 +102,12 @@ def sauvegarder_adresses(dossier_id: str, adresses: list[dict]) -> None:
             "type_contact": a.get("type_contact", "inconnu"),
             "type_detecte_auto": a.get("type_detecte_auto", True),
             "formule": (a.get("Formule") or "")[:200],
-            "l1": _trunc(a.get("L1", "")),
-            "l2": _trunc(a.get("L2", "")),
-            "l3": _trunc(a.get("L3", "")),
-            "l4": _trunc(a.get("L4", "")),
-            "l5": _trunc(a.get("L5", "")),
-            "l6": _trunc(a.get("L6", "")),
+            "l1": a.get("L1", ""),
+            "l2": a.get("L2", ""),
+            "l3": a.get("L3", ""),
+            "l4": a.get("L4", ""),
+            "l5": a.get("L5", ""),
+            "l6": a.get("L6", ""),
             "alertes": a.get("alertes", []),
             "valide": a.get("valide", False),
         })
