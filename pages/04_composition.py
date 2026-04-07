@@ -11,8 +11,7 @@ st.caption("Étape 4 / 6")
 
 dossier_id = st.session_state.get("dossier_id")
 if not dossier_id:
-    st.warning("Aucun dossier sélectionné.")
-    st.stop()
+    st.switch_page("app.py")
 
 dossier = get_dossier(dossier_id)
 df: pd.DataFrame = st.session_state.get("df_mappe")
@@ -70,6 +69,21 @@ nb_avertiss    = sum(1 for a in adresses
                      if a.get("alertes") and not a_alerte_bloquante(a["alertes"]))
 nb_ok          = nb_total - nb_bloquant - nb_avertiss
 
+# Compteur par code d'alerte
+from collections import Counter
+_codes_bloquant = Counter(
+    al["code"]
+    for a in adresses
+    for al in a.get("alertes", [])
+    if al["bloquant"]
+)
+_codes_avertiss = Counter(
+    al["code"]
+    for a in adresses
+    for al in a.get("alertes", [])
+    if not al["bloquant"]
+)
+
 # Filtre actif en session
 if "filtre_compo" not in st.session_state:
     st.session_state["filtre_compo"] = "bloquant" if nb_bloquant else "tous"
@@ -95,6 +109,58 @@ with c4:
                  type="primary" if st.session_state["filtre_compo"] == "tous" else "secondary"):
         st.session_state["filtre_compo"] = "tous"
         st.rerun()
+
+# Détail par code d'alerte + exports CSV
+if _codes_bloquant or _codes_avertiss:
+    with st.expander("📊 Détail des alertes + exports"):
+        det1, det2 = st.columns(2)
+        with det1:
+            if _codes_bloquant:
+                st.markdown("**🔴 Erreurs bloquantes par type**")
+                for code, n in sorted(_codes_bloquant.items()):
+                    st.markdown(f"- `{code}` : **{n}**")
+        with det2:
+            if _codes_avertiss:
+                st.markdown("**⚠️ Avertissements par type**")
+                for code, n in sorted(_codes_avertiss.items()):
+                    st.markdown(f"- `{code}` : **{n}**")
+
+        def _to_csv(liste_adresses: list[dict]) -> bytes:
+            import io, csv
+            buf = io.StringIO()
+            w = csv.writer(buf, delimiter=";")
+            w.writerow(["#", "L1", "L2", "L3", "L4", "L5", "L6", "Formule", "Alertes"])
+            for idx, a in liste_adresses:
+                codes = ", ".join(al["code"] for al in a.get("alertes", []))
+                w.writerow([idx + 1,
+                             a.get("L1",""), a.get("L2",""), a.get("L3",""),
+                             a.get("L4",""), a.get("L5",""), a.get("L6",""),
+                             a.get("Formule",""), codes])
+            return buf.getvalue().encode("utf-8-sig")
+
+        exp1, exp2 = st.columns(2)
+        with exp1:
+            if nb_bloquant:
+                bloquants = [(i, a) for i, a in enumerate(adresses)
+                             if a_alerte_bloquante(a.get("alertes", []))]
+                st.download_button(
+                    "⬇️ Export erreurs bloquantes (.csv)",
+                    data=_to_csv(bloquants),
+                    file_name="erreurs_bloquantes.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
+        with exp2:
+            if nb_avertiss:
+                avertiss = [(i, a) for i, a in enumerate(adresses)
+                            if a.get("alertes") and not a_alerte_bloquante(a["alertes"])]
+                st.download_button(
+                    "⬇️ Export avertissements (.csv)",
+                    data=_to_csv(avertiss),
+                    file_name="avertissements.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
 
 # ---------------------------------------------------------------------------
 # Filtrage + pagination

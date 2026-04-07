@@ -12,8 +12,7 @@ st.caption("Étape 3 / 6")
 
 dossier_id = st.session_state.get("dossier_id")
 if not dossier_id:
-    st.warning("Aucun dossier sélectionné.")
-    st.stop()
+    st.switch_page("app.py")
 
 dossier = get_dossier(dossier_id)
 df_source = st.session_state.get("df_source")
@@ -128,7 +127,7 @@ else:
 
     # Navigation pages
     if nb_pages > 1:
-        cp1, cp2, cp3 = st.columns([1, 3, 1])
+        cp1, cp2, cp3, cp4 = st.columns([1, 2, 2, 1])
         with cp1:
             if st.button("← Préc.", disabled=(page == 0)):
                 st.session_state["page_detection"] = page - 1
@@ -136,6 +135,15 @@ else:
         with cp2:
             st.caption(f"Page {page + 1} / {nb_pages}")
         with cp3:
+            saisie = st.number_input(
+                "Aller à la page", min_value=1, max_value=nb_pages,
+                value=page + 1, step=1, key="goto_detection",
+                label_visibility="collapsed",
+            )
+            if saisie - 1 != page:
+                st.session_state["page_detection"] = saisie - 1
+                st.rerun()
+        with cp4:
             if st.button("Suiv. →", disabled=(page >= nb_pages - 1)):
                 st.session_state["page_detection"] = page + 1
                 st.rerun()
