@@ -7,8 +7,6 @@ from core.mapper import construire_df_mappe
 from core.cleaner import clean_row
 from core.detector import detecter_type
 
-st.set_page_config(page_title="Détection — NormAdress",
-                   page_icon="favicon.png", layout="wide")
 
 st.title("Détection pro / particulier")
 st.caption("Étape 3 / 6")

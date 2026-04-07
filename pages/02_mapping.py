@@ -9,8 +9,6 @@ from core.db import (get_dossier, sauvegarder_mapping, charger_mapping,
 from core.mapper import auto_map, CHAMPS_CIBLES, normaliser_cle
 from core.detector import detecter_mode_distribution, CHAMPS_ADRESSE
 
-st.set_page_config(page_title="Mapping — NormAdress",
-                   page_icon="favicon.png", layout="wide")
 
 st.title("Mapping des colonnes")
 st.caption("Étape 2 / 6")

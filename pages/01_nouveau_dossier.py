@@ -2,8 +2,6 @@
 import streamlit as st
 from core.db import creer_dossier, mettre_a_jour_parametres
 
-st.set_page_config(page_title="Nouveau dossier — NormAdress",
-                   page_icon="favicon.png", layout="wide")
 
 st.title("Nouveau dossier")
 st.caption("Étape 1 / 6")

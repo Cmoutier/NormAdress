@@ -6,8 +6,6 @@ from core.db import get_dossier, sauvegarder_adresses
 from core.composer import composer_adresse
 from core.validator import valider_adresse, a_alerte_bloquante
 
-st.set_page_config(page_title="Composition — NormAdress",
-                   page_icon="favicon.png", layout="wide")
 
 st.title("Composition AFNOR")
 st.caption("Étape 4 / 6")

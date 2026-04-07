@@ -9,8 +9,6 @@ import streamlit as st
 from core.db import get_dossier, charger_adresses, changer_statut, mettre_a_jour_parametres
 from core.validator import a_alerte_bloquante
 
-st.set_page_config(page_title="Export — NormAdress",
-                   page_icon="favicon.png", layout="wide")
 
 st.title("Export final")
 st.caption("Étape 6 / 6")

@@ -6,8 +6,6 @@ from core.db import (get_dossier, charger_adresses, changer_statut,
                      mettre_a_jour_parametres)
 from core.pdf_generator import generer_pdf_bat
 
-st.set_page_config(page_title="BAT — NormAdress",
-                   page_icon="favicon.png", layout="wide")
 
 st.title("BAT — Bon À Tirer")
 st.caption("Étape 5 / 6")
