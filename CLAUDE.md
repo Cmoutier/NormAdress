@@ -1,42 +1,116 @@
 # CLAUDE.md — Instructions pour Claude Code
-# Projet : NormAdress — Mise en conformité de fichiers Excel pour publipostage Word
-
-## Contexte métier
-
-NormAdress est une application web interne utilisée par une entreprise de routage postal. Les clients fournissent des fichiers Excel contenant des listes d'adresses pour réaliser des publipostages (impression + mise sous pli + envoi postal). Ces fichiers sont souvent mal formatés et nécessitent une mise en conformité avant utilisation dans Word.
-
-L'application applique les règles de la norme **La Poste NF Z 10-011** (RNVP — Restructuration, Normalisation et Validation Postale) et génère un **BAT (Bon À Tirer)** imprimable pour validation client.
+# Projet : NormAdress — Composition d'adresses postales AFNOR pour publipostage
+# Société : STEP — step.eco
+# Repo : https://github.com/Cmoutier/NormAdress
+# Version : 4.0 — FINALE
 
 ---
 
-## Stack technique
+## LIRE EN PREMIER — Contexte métier critique
+
+STEP est une entreprise de routage postal. Elle reçoit des fichiers Excel hétérogènes
+de ses clients, contenant des destinataires mélangés (particuliers ET professionnels
+dans le même fichier). Le client fournit également son propre fichier Word (courrier)
+à chaque campagne.
+
+NormAdress produit :
+1. Un Excel conforme à la norme AFNOR XPZ-10-11 (6 lignes + champ Formule)
+2. Le fichier Word du client modifié avec les champs de fusion insérés et l'Excel lié
+3. Un PDF de BAT (blocs adresse uniquement) pour validation client
+
+**NormAdress n'est PAS** un nettoyeur de colonnes.
+**NormAdress EST** un compositeur d'adresses postales avec workflow de validation.
+
+---
+
+## Deux modes de publipostage
+
+NormAdress gère deux modes distincts, détectés automatiquement et confirmés par l'opérateur :
+
+### Mode POSTAL (envoi La Poste)
+- Adresse complète requise : L4 (voie) + L6 (CP + Ville) obligatoires
+- 6 lignes AFNOR complètes
+- Alerte BLOQUANTE si L4 ou L6 vides
+
+### Mode BAL INTERNE (remise en main propre / boîte aux lettres)
+- Pas d'adresse postale — distribution interne dans un bâtiment (ex: technopole)
+- Seules L1 (société) et L2 (contact) sont utilisées
+- Alerte INFORMATIVE seulement si L4/L6 vides : "Mode remise en main propre — non conforme AFNOR, non bloquant"
+- Le champ `Formule` est généré automatiquement (salutation personnalisée)
+- Détection automatique : si aucune colonne adresse/voie n'est mappée → proposer ce mode
+
+---
+
+## Stack technique obligatoire
 
 - **Backend** : Python 3.11+
-- **Interface** : Streamlit (pas Flask, pas FastAPI — Streamlit uniquement)
+- **Interface** : Streamlit
+- **Base de données** : Supabase (PostgreSQL) — obligatoire pour la persistance
 - **Traitement fichiers** : pandas + openpyxl
-- **Tests** : pytest + pytest-cov
-- **Export** : openpyxl (Excel coloré) + HTML (BAT) + JSON (travaux)
-- **Base de données** : aucune — application 100% stateless
-- **Favicon** : PIL/Pillow (conversion SVG → PNG)
+- **Génération PDF BAT** : reportlab
+- **Manipulation Word** : python-docx (injection champs de fusion)
+- **Tests** : pytest + pytest-cov (couverture ≥ 85% sur core/)
+- **Drag & drop** : streamlit-sortables
 
 ---
 
-## Pipeline de déploiement
+## Schéma base de données Supabase
 
+Créer ces tables dans Supabase AVANT tout développement :
+
+```sql
+CREATE TABLE dossiers (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  nom VARCHAR(200) NOT NULL,
+  client VARCHAR(200),
+  statut VARCHAR(50) DEFAULT 'en_cours',
+  -- statuts : en_cours | a_valider | valide | exporte
+  mode_distribution VARCHAR(20) DEFAULT 'postal',
+  -- valeurs : postal | bal_interne
+  parametres JSONB DEFAULT '{}',
+  -- contient : ordre_nom_prenom, format_pro, pays_defaut,
+  --            fichier_source_nom, fichier_word_nom,
+  --            date_envoi_bat, date_validation_client
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE adresses (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  dossier_id UUID REFERENCES dossiers(id) ON DELETE CASCADE,
+  ligne_source INTEGER,
+  type_contact VARCHAR(20),       -- particulier | professionnel | inconnu
+  type_detecte_auto BOOLEAN,
+  -- Champ formule de politesse (mode BAL interne + optionnel mode postal)
+  formule VARCHAR(200),
+  -- ex: "Cher Monsieur Jean DUPONT," ou "Chers Messieurs LERBS et GIRARDIN,"
+  -- 6 lignes AFNOR
+  l1 VARCHAR(38),
+  l2 VARCHAR(38),
+  l3 VARCHAR(38),
+  l4 VARCHAR(38),
+  l5 VARCHAR(38),
+  l6 VARCHAR(38),
+  -- Alertes qualité
+  alertes JSONB DEFAULT '[]',
+  -- ex: [{"code":"LONGUEUR","ligne":"L1","valeur":42,"bloquant":false}]
+  valide BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE mappings (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  dossier_id UUID REFERENCES dossiers(id) ON DELETE CASCADE,
+  colonne_source VARCHAR(200),
+  champ_cible VARCHAR(100),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 ```
-Développement local → GitHub (push sur main) → Render (déploiement automatique)
+
+Variables d'environnement (Render + `.env` local) :
 ```
-
-- Repo GitHub : **https://github.com/Cmoutier/NormAdress**
-- URL application : **https://normadress.onrender.com**
-- CI : GitHub Actions (`.github/workflows/ci.yml`)
-- Render se met en veille après 15 min d'inactivité (plan gratuit — cold start ~60s)
-
-```bash
-git add .
-git commit -m "feat: description"
-git push origin main
-# → Render redéploie automatiquement
+SUPABASE_URL=https://xxxx.supabase.co
+SUPABASE_KEY=eyJ...
 ```
 
 ---
@@ -45,365 +119,569 @@ git push origin main
 
 ```
 normadress/
-├── app.py                    # Point d'entrée Streamlit (interface complète)
-├── render.yaml               # Configuration déploiement Render
-├── requirements.txt          # Dépendances Python
-├── favicon.svg               # SVG source du favicon (tableur + baguette magique)
-├── favicon.png               # PNG 128×128 fond transparent (généré depuis favicon.svg)
-├── favicon_src.svg           # SVG intermédiaire (icône seule sans texte)
-├── logo.svg                  # Logo complet NormAdress (icône + texte)
+├── app.py                         # Point d'entrée Streamlit — tableau de bord
+├── render.yaml
+├── requirements.txt
 ├── README.md
-├── .github/
-│   └── workflows/
-│       └── ci.yml
+├── .env.example
+├── .github/workflows/ci.yml
 ├── .streamlit/
-│   └── config.toml           # Thème vert #1E6B3C
-├── .claude/
-│   └── mcp_config.json
-├── cleaner/
+│   ├── config.toml                # Thème vert NormAdress
+│   └── favicon.png
+├── .claude/mcp_config.json
+├── pages/
+│   ├── 01_nouveau_dossier.py      # Création dossier + upload fichiers
+│   ├── 02_mapping.py              # Mapping colonnes drag & drop
+│   ├── 03_detection.py            # Détection pro/particulier + révision
+│   ├── 04_composition.py          # Composition 6 lignes AFNOR + Formule
+│   ├── 05_bat.py                  # PDF BAT adresses + validation client
+│   └── 06_export.py               # Export Excel + Word fusionné
+├── core/
 │   ├── __init__.py
-│   ├── loader.py             # Chargement Excel/CSV, détection encoding/séparateur
-│   ├── mapper.py             # Mapping colonnes → champs standards (synonymes)
-│   ├── rules.py              # Règles de nettoyage (civilité, nom, prénom, CP, ville…)
-│   ├── consolidator.py       # Consolidation adresses + doublons + multi-contacts
-│   ├── coherence.py          # Contrôles de cohérence inter-champs
-│   ├── laposte.py            # Règles La Poste NF Z 10-011 + format_envelope_lines
-│   ├── bat.py                # Génération BAT HTML (Bon À Tirer)
-│   └── exporter.py           # Génération Excel coloré + rapport TXT
+│   ├── db.py                      # Connexion Supabase + CRUD
+│   ├── detector.py                # Détection pro/particulier + mode distribution
+│   ├── mapper.py                  # Mapping colonnes → champs internes
+│   ├── composer.py                # Construction 6 lignes AFNOR + Formule
+│   ├── cleaner.py                 # Nettoyage (casse, CP, espaces, civilités)
+│   ├── validator.py               # Contrôles qualité AFNOR
+│   ├── pdf_generator.py           # PDF BAT blocs adresse
+│   └── word_injector.py           # Injection champs fusion dans le Word client
 └── tests/
-    ├── __init__.py
-    ├── test_rules.py
-    ├── test_mapper.py
-    ├── test_consolidator.py
-    ├── test_coherence.py
-    ├── test_laposte.py
-    ├── test_bat.py
-    ├── test_loader.py
-    ├── test_exporter.py
-    ├── create_fixtures.py    # Script de génération des fixtures
+    ├── test_detector.py
+    ├── test_composer.py
+    ├── test_cleaner.py
+    ├── test_validator.py
     └── fixtures/
-        ├── demo_standard.xlsx
-        ├── demo_multi_contacts.xlsx
-        ├── demo_adresses_mal_remplies.xlsx
-        ├── demo_colonnes_synonymes.xlsx
-        └── demo_csv_semicolon.csv
+        ├── synerpa_sample.xlsx     # Pro avec contact, CP flottant
+        ├── helioparc_sample.xlsx   # Multi-contacts sans adresse
+        └── voeux_sample.xlsx       # Contact concaténé NOM Prénom
+```
+
+---
+
+## Workflow utilisateur — les 6 étapes
+
+### ÉTAPE 1 — Nouveau dossier (`pages/01_nouveau_dossier.py`)
+
+**Tableau de bord (app.py)** : liste tous les dossiers avec statut coloré + date + bouton "Reprendre".
+Statuts : 🟡 En cours | 🔵 À valider | 🟢 Validé | ✅ Exporté
+
+**Création d'un dossier :**
+- Nom du dossier (ex: "Gazette Synerpa — Avril 2025")
+- Nom du client
+- Upload fichier Excel source (xlsx, xls, csv)
+- Upload fichier Word client (le courrier — .docx)
+- **Paramètres campagne** :
+  - Ordre identité : `AFNOR — Civilité Prénom NOM` (défaut) | `Civilité NOM Prénom`
+  - Format pro : `Mode A — L1 Société / L2 Contact` (défaut) | `Mode B — L1 Contact / L2 Société`
+  - Pays par défaut : France (modifiable)
+  - En-tête détectée : auto-détecter | oui | non
+- Sauvegarde en base avec statut `en_cours`
+
+---
+
+### ÉTAPE 2 — Mapping des colonnes (`pages/02_mapping.py`)
+
+**Interface drag & drop** (streamlit-sortables) : colonnes source à gauche, champs cibles à droite.
+Afficher les 3 premières valeurs de chaque colonne source pour aider l'opérateur.
+
+**Champs cibles disponibles :**
+
+```
+── IDENTITÉ CONTACT 1 ──────────────────────────
+civilite_1       Civilité contact 1
+nom_1            Nom contact 1
+prenom_1         Prénom contact 1
+identite_1       Identité complète concaténée contact 1 (NOM Prénom — pas de découpage)
+
+── IDENTITÉ CONTACT 2 (multi-contacts) ─────────
+civilite_2       Civilité contact 2
+nom_2            Nom contact 2
+prenom_2         Prénom contact 2
+identite_2       Identité complète concaténée contact 2
+
+── IDENTITÉ CONTACT 3 (multi-contacts) ─────────
+civilite_3       Civilité contact 3
+nom_3            Nom contact 3
+prenom_3         Prénom contact 3
+
+── ORGANISATION ────────────────────────────────
+societe          Raison sociale / Structure
+
+── FORMULE DE POLITESSE ────────────────────────
+formule_source   Formule existante dans le fichier (Cher/Chère/Chers...)
+                 Si mappée : utilisée telle quelle
+                 Si non mappée : générée automatiquement
+
+── ADRESSE ─────────────────────────────────────
+adresse_voie     Numéro + type + nom de voie → L4 AFNOR
+adresse_comp_int Complément intérieur (appt, étage) → L2 AFNOR
+adresse_comp_ext Complément extérieur (bât, résidence) → L3 AFNOR
+adresse_lieu_dit Lieu-dit ou BP → L5 AFNOR
+code_postal      Code postal → L6 AFNOR
+ville            Ville → L6 AFNOR
+pays             Pays (optionnel — ajouté en L6 si étranger)
+
+── IDENTIFIANT ─────────────────────────────────
+id_client        Identifiant unique (conservé intact dans l'export)
+```
+
+**Détection automatique du mapping par synonymes** (dans `core/mapper.py`) :
+
+```python
+SYNONYMS = {
+    'civilite_1':    ['civilité', 'civilite', 'civ', 'titre', 'formule-1', 'civilité-1', 'salutation'],
+    'nom_1':         ['nom', 'nom-1', 'name', 'lastname', 'nom_famille'],
+    'prenom_1':      ['prénom', 'prenom', 'prénom-1', 'prenom-1', 'firstname'],
+    'identite_1':    ['contact', 'destinataire', 'identité'],
+    'civilite_2':    ['civilité-2', 'civilite-2', 'formule-2'],
+    'nom_2':         ['nom-2', 'nom2'],
+    'prenom_2':      ['prénom-2', 'prenom-2'],
+    'civilite_3':    ['civilité7', 'civilite7', 'titre6'],
+    'nom_3':         ['nom8'],
+    'prenom_3':      ['prénom-3', 'prenom-3', 'prénom9', 'prenom9'],
+    'societe':       ['raison sociale', 'société', 'societe', 'structure', 'company', 'entreprise', 'organisation'],
+    'formule_source':['formule-1', 'formule', 'appel'],
+    'adresse_voie':  ['rue 1', 'rue1', 'adresse 1', 'adresse1', 'adresse', 'rue', 'voie', 'address'],
+    'adresse_comp_int': ['rue 2', 'rue2', 'adresse 2', 'adresse2', 'complement', 'appt'],
+    'adresse_comp_ext': ['rue 3', 'rue3', 'adresse 3', 'adresse3', 'bâtiment', 'batiment', 'résidence'],
+    'adresse_lieu_dit': ['lieu-dit', 'lieu dit', 'bp', 'service'],
+    'code_postal':   ['cp', 'code postal', 'codepostal', 'zip', 'postal'],
+    'ville':         ['ville', 'city', 'commune', 'localité'],
+    'pays':          ['pays', 'country', 'nation'],
+    'id_client':     ['id', 'identifiant', 'référence', 'ref', 'numéro'],
+}
+
+def normaliser_cle(s):
+    """Minuscules + suppression tout ce qui n'est pas alphanumérique"""
+    import re
+    return re.sub(r'[^a-z0-9]', '', s.lower().strip())
+```
+
+**Détection du mode distribution** :
+- Si aucun champ adresse (adresse_voie, code_postal, ville) n'est mappé après auto-détection
+  → afficher : "Aucune colonne adresse détectée. S'agit-il d'un publipostage en remise
+    directe (boîte aux lettres interne) ?" avec bouton Confirmer / Non, je veux mapper
+- Mode BAL interne confirmé → sauvegardé dans `dossiers.mode_distribution = 'bal_interne'`
+
+**Cas spécial — fichier sans adresse à joindre avec un second fichier** :
+- Bouton "Joindre un second fichier (adresses)" → upload d'un second Excel
+- L'opérateur choisit la colonne de jointure commune (ex: Structure = Société)
+- Fusion des deux fichiers en mémoire avant de continuer
+
+Le mapping est sauvegardé en base (table `mappings`).
+
+---
+
+### ÉTAPE 3 — Détection pro / particulier (`pages/03_detection.py`)
+
+**Règle de détection automatique** (dans `core/detector.py`) :
+
+```python
+def detecter_type(row) -> str:
+    """
+    Priorité :
+    1. Si 'societe' remplie → 'professionnel'
+    2. Si 'societe' vide ET (nom_1 OU prenom_1 OU identite_1 rempli) → 'particulier'
+    3. Si civilite_1 contient indicateur pro (SA, SAS, SARL, SCI, EURL, SASU, SEML) → 'professionnel'
+    4. Sinon → 'inconnu'
+    """
+```
+
+**Interface de révision** :
+- Tableau coloré : 🟢 particulier | 🔵 professionnel | 🟠 inconnu
+- Filtre par type
+- Toggle de correction manuelle ligne par ligne
+- Compteur temps réel : X particuliers / Y professionnels / Z inconnus
+- Bouton "Valider la détection"
+
+---
+
+### ÉTAPE 4 — Composition AFNOR + Formule (`pages/04_composition.py`)
+
+Cœur de `core/composer.py`.
+
+#### Règles de composition selon le mode
+
+```
+══════════════════════════════════════════════════════════════
+MODE POSTAL — PARTICULIER
+══════════════════════════════════════════════════════════════
+L1 = Civilité + Prénom + NOM          (ordre selon paramètre — AFNOR par défaut)
+     Si identite_1 mappée → utiliser telle quelle (pas de reconstruction)
+     ex AFNOR     : "M. Jean DUPONT"
+     ex alternatif: "M. DUPONT Jean"
+L2 = adresse_comp_int (appt, étage)   vide si absent
+L3 = adresse_comp_ext (bât, résidence) vide si absent
+L4 = adresse_voie                      ← OBLIGATOIRE en mode postal
+L5 = adresse_lieu_dit                  vide si absent
+L6 = CodePostal + VILLE                ← OBLIGATOIRE en mode postal
+     Si pays étranger : CodePostal + VILLE + PAYS (en majuscules)
+     ex France   : "75001 PARIS"
+     ex étranger : "1000 BRUXELLES BELGIQUE"
+
+Formule = générée automatiquement :
+  1 homme   → "Cher Monsieur [Prénom NOM],"
+  1 femme   → "Chère Madame [Prénom NOM],"
+  Si formule_source mappée → utiliser la valeur source telle quelle
+
+Si 2 contacts : créer DEUX LIGNES séparées, L2-L6 identiques
+  Ligne A : L1 = contact 1
+  Ligne B : L1 = contact 2
+
+══════════════════════════════════════════════════════════════
+MODE POSTAL — PROFESSIONNEL — FORMAT A (défaut)
+══════════════════════════════════════════════════════════════
+L1 = Raison sociale
+L2 = Civilité + Prénom + NOM du contact (ordre selon paramètre)
+     Si identite_1 mappée → utiliser telle quelle
+     vide si pas de contact nommé
+L3 = adresse_comp_ext                  vide si absent
+L4 = adresse_voie                      ← OBLIGATOIRE en mode postal
+L5 = adresse_lieu_dit                  vide si absent
+L6 = CodePostal + VILLE [+ PAYS]       ← OBLIGATOIRE en mode postal
+
+Formule = générée selon contacts (même règle que particulier)
+
+══════════════════════════════════════════════════════════════
+MODE POSTAL — PROFESSIONNEL — FORMAT B
+══════════════════════════════════════════════════════════════
+L1 = Civilité + Prénom + NOM du contact (ou identite_1)
+L2 = Raison sociale
+L3 à L6 = identiques au Format A
+
+══════════════════════════════════════════════════════════════
+MODE BAL INTERNE — tous types confondus
+══════════════════════════════════════════════════════════════
+L1 = Raison sociale (si pro) ou vide (si particulier)
+L2 = "A l'attention de" + Civilité(s) + Prénom(s) + NOM(s)
+     ex: "A l'attention de Monsieur Thierry LESUR"
+     ex: "A l'attention de Messieurs Alexander LERBS et Nicolas GIRARDIN"
+L3 = vide
+L4 = vide  → alerte informative "Mode BAL interne — non conforme AFNOR"
+L5 = vide
+L6 = vide
+
+Formule = générée automatiquement selon nombre et genre des contacts :
+  1 homme           → "Cher Monsieur [Prénom NOM],"
+  1 femme           → "Chère Madame [Prénom NOM],"
+  2 hommes          → "Chers Messieurs [Prénom NOM1] et [Prénom NOM2],"
+  2 femmes          → "Chères Mesdames [Prénom NOM1] et [Prénom NOM2],"
+  homme + femme     → "Chers Monsieur [NOM1] et Madame [NOM2],"
+  3 contacts        → "Chers Monsieur [NOM1], Madame [NOM2] et Monsieur [NOM3],"
+  Si formule_source mappée → utiliser la valeur source telle quelle
+```
+
+#### Règles de nettoyage (dans `core/cleaner.py`)
+
+**Civilités :**
+```
+Monsieur, monsieur, M, Mr, MR, M.   → M.
+Madame, madame, Mme, MME, mme.      → Mme
+Mademoiselle, Mlle, MLLE            → Mlle
+Docteur, Dr, DR                     → Dr
+Messieurs                           → Messieurs  (conservé pour multi-contacts)
+Mesdames                            → Mesdames   (conservé pour multi-contacts)
+```
+
+**Code postal :**
+- CP stocké en flottant Excel (69002.0) → convertir : `str(int(float(cp)))` puis padder
+- 4 chiffres → zéro initial : `1000` → `01000`
+- 3 chiffres → deux zéros : `750` → `00750`
+- Déjà 5 chiffres → conserver
+- Non numérique → conserver + alerte CP_INVALIDE_FR
+
+**Noms :**
+- Noms de famille → MAJUSCULES
+- Prénoms → Format Titre (Jean-Pierre, Marie-Claire)
+- Particules de, du, de la, des → minuscules dans les prénoms
+- Si `identite_1` mappée (NOM Prénom concaténé) → nettoyage espaces uniquement, pas de transformation de casse (l'opérateur a déjà formaté)
+
+**Ville :** MAJUSCULES, espaces nettoyés, CEDEX conservé
+
+**Général :**
+- BOM (U+FEFF), espaces insécables (U+00A0), U+200B → supprimés
+- Tabulations, retours ligne → espace simple
+- Espaces multiples → espace simple
+- Strip début/fin
+
+#### Contrôles qualité (dans `core/validator.py`)
+
+```python
+ALERTES = [
+    # Longueur AFNOR — 38 caractères max (norme XPZ-10-11)
+    {"code": "LONGUEUR",       "ligne": "Ln", "message": "L{n} dépasse 38 car. ({val} car.)",           "bloquant": False},
+
+    # Mode postal — champs obligatoires
+    {"code": "L4_VIDE",        "ligne": "L4", "message": "Voie manquante — adresse incomplète",         "bloquant": True},
+    {"code": "L6_VIDE",        "ligne": "L6", "message": "CP/Ville manquants — adresse incomplète",     "bloquant": True},
+
+    # Mode BAL interne
+    {"code": "BAL_INTERNE",    "ligne": "",   "message": "Mode BAL interne — non conforme AFNOR",       "bloquant": False},
+
+    # CP
+    {"code": "CP_INVALIDE_FR", "ligne": "L6", "message": "CP '{val}' non conforme (5 chiffres)",        "bloquant": False},
+    {"code": "ETRANGER",       "ligne": "L6", "message": "Adresse étrangère — vérification recommandée","bloquant": False},
+
+    # Identité
+    {"code": "L1_VIDE",        "ligne": "L1", "message": "Ligne 1 vide — destinataire non identifié",   "bloquant": False},
+    {"code": "TYPE_INCONNU",   "ligne": "",   "message": "Type pro/particulier non déterminé",           "bloquant": False},
+]
+```
+
+**Interface composition :**
+- Tableau avec aperçu des 6 lignes + Formule pour chaque destinataire
+- Icônes alertes en ligne (⚠ orange = non bloquant, 🔴 rouge = bloquant)
+- Filtre "Uniquement les lignes avec alertes"
+- Compteur alertes bloquantes / non bloquantes
+- Édition manuelle d'une ligne AFNOR possible (clic sur la cellule)
+- Toutes les données sauvegardées en base
+
+---
+
+### ÉTAPE 5 — BAT PDF (`pages/05_bat.py`)
+
+**Génération PDF** (dans `core/pdf_generator.py`) avec reportlab.
+
+**Format du PDF :**
+Grille de blocs adresse, 4 par page (2 colonnes × 2 lignes), simulant des étiquettes.
+Chaque bloc :
+```
+┌─────────────────────────────────────┐
+│ M. Jean DUPONT                      │  ← L1
+│ Appartement 12                      │  ← L2 (si remplie)
+│ Résidence Les Pins                  │  ← L3 (si remplie)
+│ 12 rue de la Paix                   │  ← L4
+│ 75001 PARIS                         │  ← L6
+└─────────────────────────────────────┘
+```
+- Les lignes vides ne s'affichent PAS (comme sur une vraie enveloppe)
+- Les lignes dépassant 38 caractères sont surlignées en orange dans le PDF
+- Numéro de ligne source affiché en petit en haut à droite du bloc (pour retrouver dans Excel)
+- En-tête du PDF : nom du dossier + date de génération + nb de destinataires
+
+**Workflow validation :**
+- Bouton "Générer le PDF BAT" → téléchargement
+- Bouton "Marquer comme envoyé au client" → statut `a_valider` + date enregistrée
+- Bouton "Marquer comme validé par le client" → statut `valide` + date enregistrée
+
+---
+
+### ÉTAPE 6 — Export (`pages/06_export.py`)
+
+#### 6a. Export Excel
+
+Un seul fichier, un seul onglet "Adresses_NormAdress" :
+
+| ID_CLIENT | Formule | L1 | L2 | L3 | L4 | L5 | L6 |
+|---|---|---|---|---|---|---|---|
+| 001 | Cher Monsieur Jean DUPONT, | M. Jean DUPONT | Appt 12 | | 12 rue de la Paix | | 75001 PARIS |
+| 002 | Chers Messieurs... | 2AE ASSISTANCE... | A l'attention de... | | | | |
+
+Règles Excel :
+- Les cellules vides restent vides (pas de texte, pas d'espace)
+- CP exporté en TEXT (pas en nombre) → `@` format dans openpyxl pour éviter la perte du zéro initial
+- Les lignes avec alertes bloquantes sont colorées en rouge pâle dans Excel (fond #FCEAEA)
+- Les lignes avec alertes non bloquantes sont colorées en orange pâle (#FEF3E6)
+- Largeur des colonnes ajustée automatiquement
+
+#### 6b. Export Word (dans `core/word_injector.py`)
+
+Le fichier Word fourni par le client est modifié avec python-docx :
+
+1. Détecter la zone adresse dans le document (chercher un marqueur ou une zone de texte)
+2. Injecter les champs de fusion Word : `{ MERGEFIELD "L1" }`, `{ MERGEFIELD "Formule" }`, etc.
+3. Configurer la source de données : lier l'Excel exporté comme source de publipostage
+4. Activer l'option "Supprimer les paragraphes vides" (via XML directement)
+
+**Instruction affichée à l'opérateur après téléchargement du Word :**
+```
+Le fichier Word est prêt. Pour finaliser le publipostage :
+1. Ouvrir le fichier Word téléchargé
+2. Onglet "Publipostage" → "Terminer et fusionner" → "Modifier des documents individuels"
+3. Sélectionner "Tous" → OK
+4. Word génère les N lettres fusionnées dans un nouveau document
+5. Imprimer ou exporter en PDF
+```
+
+**Après export :**
+- Statut dossier → `exporte` + date enregistrée
+- Les deux fichiers (Excel + Word) restent téléchargeables depuis le tableau de bord
+
+---
+
+## Cas spéciaux identifiés dans les fichiers réels
+
+### Fichier SYNERPA (2 617 lignes — pro avec contact)
+- 100% professionnel (Raison Sociale toujours remplie)
+- CP stocké en flottant Excel (69002.0) → `str(int(float(cp))).zfill(5)`
+- Rue 2 et Rue 3 parfois remplies → mapper sur adresse_comp_int et adresse_comp_ext
+- Civilités : Monsieur, Madame, Docteur
+
+### Fichier HELIOPARC (141 lignes — multi-contacts sans adresse)
+- Mode BAL interne (pas de colonne adresse)
+- Jusqu'à 3 contacts par ligne (colonnes Nom-1/2, Prénom-1/2/3, Civilité-1/2/7)
+- Colonne `et` : connecteur entre contacts — ignorer dans le mapping
+- Colonne `Formule-1` : Cher/Chère/Chers → mapper sur formule_source si disponible
+- Colonne `Structure` = Société → mapper sur `societe`
+- Pas d'adresse → mode BAL détecté automatiquement
+
+### Fichier VOEUX (155 lignes — contact concaténé)
+- Colonne `Contact` = "NOM Prénom" concaténé → mapper sur `identite_1` (pas de découpage)
+- Colonne `Structure` = Société (150/155 remplie)
+- Adresse 2 remplie sur 59 lignes → mapper sur adresse_comp_int
+
+---
+
+## Déploiement
+
+### Git et GitHub
+```bash
+git init
+git add .
+git commit -m "feat: NormAdress v4 initial"
+git remote add origin https://github.com/Cmoutier/NormAdress.git
+git branch -M main
+git push -u origin main
+```
+
+### render.yaml
+```yaml
+services:
+  - type: web
+    name: normadress
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: SUPABASE_URL
+        fromSecret: SUPABASE_URL
+      - key: SUPABASE_KEY
+        fromSecret: SUPABASE_KEY
+    plan: free
+```
+
+### .streamlit/config.toml
+```toml
+[server]
+headless = true
+enableCORS = false
+enableXsrfProtection = false
+
+[theme]
+primaryColor = "#1E6B3C"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F2F2F2"
+textColor = "#1A1A1A"
+font = "sans serif"
+```
+
+### Instructions Render (à afficher à l'utilisateur après push)
+```
+DÉPLOIEMENT RENDER — compte existant STEP :
+
+1. Dashboard Render → "New +" → "Web Service"
+2. Sélectionner le repo GitHub "Cmoutier/NormAdress"
+3. Render détecte render.yaml automatiquement
+4. Dans "Environment" → ajouter les variables secrètes :
+   SUPABASE_URL  (depuis dashboard Supabase → Settings → API)
+   SUPABASE_KEY  (clé "anon public" depuis Supabase)
+5. Cliquer "Create Web Service"
+6. Chaque push sur main redéploie automatiquement
+
+Note : sur le plan gratuit, l'app s'endort après 15min (30-50s de réveil).
+```
+
+### GitHub Actions CI
+```yaml
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - run: pytest tests/ -v --cov=core --cov-fail-under=85
 ```
 
 ---
 
 ## requirements.txt
-
 ```
-streamlit>=1.32.0
-pandas>=2.2.1
-openpyxl>=3.1.2
-pytest>=8.1.1
-pytest-cov>=5.0.0
-chardet>=5.2.0
-Pillow>=10.0.0
-```
-
-> Les versions sont assouplies (`>=`) pour compatibilité avec Render (Python 3.11).
-
----
-
-## Champs standards de sortie — noms de fusion Word
-
-Ces noms doivent être **EXACTEMENT** respectés :
-
-| Champ | Description | Norme La Poste |
-|---|---|---|
-| `Civilite` | M. / Mme / Mlle | — |
-| `Nom` | Nom de famille en MAJUSCULES | — |
-| `Prenom` | Prénom en Titre | — |
-| `Societe` | Raison sociale | L1 (B2B) |
-| `Adresse1` | N° et libellé de voie | **L4 — obligatoire** |
-| `Adresse2` | BP, lieu-dit, complément distribution | L5 |
-| `Adresse3` | Bâtiment, résidence, étage | L3 |
-| `CodePostal` | 5 chiffres avec zéro initial | L6 (1re partie) |
-| `Ville` | En MAJUSCULES | L6 (2e partie) |
-
-### Structure enveloppe NF Z 10-011 (6 lignes max)
-
-```
-L1 — Raison sociale  OU  Civilité Prénom NOM
-L2 — Contact B2B (À L'ATTENTION DE…)  OU  complément d'identité
-L3 — Adresse3 : bâtiment, résidence, étage
-L4 — Adresse1 : N° et libellé de voie  ← OBLIGATOIRE
-L5 — Adresse2 : BP, CS, TSA, lieu-dit
-L6 — CODE POSTAL  VILLE  (ou CEDEX)
+streamlit==1.32.0
+pandas==2.2.1
+openpyxl==3.1.2
+supabase==2.3.0
+reportlab==4.1.0
+python-docx==1.1.2
+streamlit-sortables==0.2.0
+pytest==8.1.1
+pytest-cov==5.0.0
+chardet==5.2.0
+python-dotenv==1.0.1
 ```
 
 ---
 
-## Modules cleaner/ — description détaillée
-
-### loader.py
-- Charge `.xlsx`, `.xls`, `.csv`
-- Détecte l'encoding via `chardet`, le séparateur CSV automatiquement
-- Retourne `{"type", "sheets", "dataframes"}` — ne modifie JAMAIS le fichier source
-
-### mapper.py
-- `auto_map(columns)` → dict `{col_source: champ_standard}` via table de synonymes
-- `detect_multi_contacts(mapping)` → détecte les doublons de champ (ex : 2 colonnes "Nom")
-- `normalize_col(col)` → minuscules + suppression accents + suppression non-alphanum
-
-### rules.py
-- `clean_whitespace(value)` — BOM, espaces insécables, zero-width, tabulations, strip
-- `clean_civilite(value)` → `(valeur, ok)` — M./Mme/Mlle + signalement si inconnu
-- `clean_nom(value)` → MAJUSCULES + strip
-- `clean_prenom(value)` → Titre + tirets composés + particules minuscules
-- `clean_codepostal(value)` → `(valeur, ok)` — zéro-padding + validation
-- `clean_ville(value)` → MAJUSCULES
-- `apply_rules(df, options)` → `(df_clean, rapport_lignes)`
-
-### consolidator.py
-- `consolidate_addresses(df)` → décale Adresse1/2/3 si L1 vide — retourne `(df, journal)`
-- `remove_empty_rows(df)` → supprime si Nom ET Adresse1 ET CodePostal tous vides
-- `detect_duplicates(df)` → Nom+CodePostal identiques — SIGNALE, ne supprime PAS
-- `explode_multi_contacts(df, multi_contacts, source_df)` → une ligne par contact
-
-### coherence.py
-Contrôles inter-champs — toutes les fonctions retournent des alertes avec `auto_fixable: bool` :
-
-| Fonction | Action | Auto |
-|---|---|---|
-| `fix_codepostal_float` | `75001.0` → `75001` | ✅ |
-| `detect_civilite_in_nom` | `M. DUPONT` → Civilite=M., Nom=DUPONT | ✅ |
-| `detect_cedex` | `paris cedex 08` → `PARIS CEDEX 08` | ✅ |
-| `detect_nom_prenom_combine` | `DUPONT Jean` avec Prénom vide | ⚠ |
-| `check_societe_contact` | Société + Contact → ordre postal recommandé | ⚠ |
-| `detect_full_address_in_field` | CP détecté dans Adresse1 | ⚠ |
-| `detect_nom_sans_adresse` | Contact sans adresse ni CP | ⚠ |
-| `run_all(df)` | Point d'entrée — exécute tout dans l'ordre | — |
-
-### laposte.py
-Règles La Poste NF Z 10-011 + RNVP :
-
-- `remove_accents(value)` — désaccentuation OCR (É→E, À→A, Ç→C)
-- `normalize_voie(adresse)` — AVENUE→AV, BOULEVARD→BD, IMPASSE→IMP… (table RNVP complète)
-- `clean_address_punctuation(value)` — virgules, parenthèses, points dans adresses
-- `normalize_bp_cs(value)` — B.P.123→BP 123, CS70001→CS 70001, TSA→TSA
-- `format_attention(civ, prenom, nom)` → `"A L'ATTENTION DE M. JEAN DUPONT"`
-- `check_completude(df)` — Identité + Adresse1 + CodePostal + Ville obligatoires
-- `apply_laposte_rules(df, options)` → `(df, alerts)` — point d'entrée
-- `format_envelope_lines(row)` → `list[tuple[str, str]]` — lignes L1 à L6 selon la norme
-
-### bat.py
-Génération du BAT (Bon À Tirer) HTML :
-
-- `generate_bat(df, nom_travail, doublons, consolidation_journal)` → HTML complet
-- Grille 3 colonnes, CSS `@media print`, plis numérotés
-- Badges rouge (doublon) et jaune (adresse réorganisée)
-- Mention NF Z 10-011, imprimable via Ctrl+P → PDF
-
-### exporter.py
-- `export_excel(df, original_df, rapport_lignes, doublons, consolidation_journal)` → bytes
-  - Coloration : vert = corrigé, orange = adresse consolidée, rouge = doublon
-- `export_rapport(...)` → string TXT avec résumé + détail de chaque anomalie
-
----
-
-## Interface Streamlit — app.py
-
-### Sidebar
-- **Gestion des travaux** : chargement `.json` (restaure mapping + options) + sauvegarde
-- Format JSON : `{version, nom, date, notes, mapping, options, laposte}`
-
-### Flux principal (étapes numérotées)
-
-1. **Import** — `st.file_uploader` (xlsx/xls/csv) + sélection feuille si multi-feuilles
-2. **Mapping** — `st.data_editor` tableau compact : colonne source | exemple | champ cible
-   - Détection auto pré-remplie + priorité au travail chargé
-3. **Multi-contacts** — si détecté : `st.warning` + case à cocher pour éclater
-4. **Options** — expander "Règles de base" + expander "Conformité La Poste NF Z 10-011"
-5. **Lancement** — bouton "Mettre en conformité"
-
-### Pipeline de traitement (dans l'ordre)
-1. Construction DataFrame mappé
-2. Éclatement multi-contacts (si activé)
-3. `run_coherence(df)` — corrections auto + alertes
-4. `apply_rules(df, options)` — nettoyage de base
-5. Mention "À L'ATTENTION DE" (si option activée)
-6. `apply_laposte_rules(df, laposte_options)` — conformité La Poste
-7. `consolidate_addresses(df)` (si option activée)
-8. `remove_empty_rows(df)` (si option activée)
-9. `detect_duplicates(df)`
-
-### Résultats — 3 onglets
-
-**Onglet "Aperçu enveloppes"**
-- Navigation : ⏮ Précédent · n/total · Suivant ⏭ + saut direct au numéro de pli
-- Côte à côte : carte source (données brutes) → enveloppe normalisée (L1-L6)
-- Badge doublon / adresse réorganisée sur le pli courant
-
-**Onglet "Tableau complet"**
-- DataFrame coloré (rouge = doublon, jaune = consolidé)
-
-**Onglet "Alertes et anomalies"**
-- Corrections automatiques (✅), points à vérifier (⚠), alertes La Poste (📮), doublons, anomalies
-
-### Téléchargements
-- `adresses_normalisees.xlsx` — Excel coloré
-- `rapport_normadress.txt` — rapport texte
-- `BAT_YYYYMMDD_HHMM.html` — Bon À Tirer HTML imprimable
-
----
-
-## Règles de nettoyage — spécifications exactes
-
-### Civilité
-- `M`, `Mr`, `MR`, `Monsieur`, `M.`, `Mr.` → `M.`
-- `Mme`, `MME`, `Madame`, `mme`, `mme.` → `Mme`
-- `Mlle`, `MLLE`, `Mademoiselle` → `Mlle`
-- Non reconnue → laisser, signaler dans le rapport
-
-### Nom
-- MAJUSCULES + strip + espaces multiples → simple
-
-### Prénom
-- Format Titre : première lettre de chaque mot
-- Tirets : `jean-pierre` → `Jean-Pierre`
-- Particules `de`, `du`, `de la`, `d` → minuscules
-
-### Code postal
-- `75001.0` (float Excel) → `75001` (via `coherence.fix_codepostal_float`)
-- 4 chiffres (1000-9999) → zéro préfixé : `1000` → `01000`
-- 3 chiffres → deux zéros : `750` → `00750`
-- 5 chiffres → laisser tel quel
-- Non numérique → signaler
-
-### Espaces et caractères
-- BOM U+FEFF, espaces insécables U+00A0, zero-width U+200B
-- Tabulations/retours à la ligne → espace
-- Espaces multiples → simple, strip
-
-### Consolidation adresses (règle critique)
-- Adresse1 ne doit **JAMAIS** être vide si Adresse2 ou Adresse3 est remplie
-- Adresse1 vide + Adresse2 remplie → décalage : A1←A2, A2←A3, A3←''
-- Adresse1 et A2 vides + A3 remplie → A1←A3, A2/A3←''
-
-### Doublons
-- Critère : Nom + CodePostal identiques (minuscules)
-- **SIGNALÉS uniquement — jamais supprimés automatiquement**
-
----
-
-## Contrôles de cohérence inter-champs
-
-Exécutés **avant** les règles de nettoyage via `coherence.run_all()` :
-
-| Cas | Exemple | Traitement |
-|---|---|---|
-| CP float Excel | `75001.0` | Auto → `75001` |
-| Civilité dans le Nom | `M. DUPONT` | Auto → Civ=M., Nom=DUPONT |
-| CEDEX dans Ville | `paris cedex 08` | Auto → `PARIS CEDEX 08` |
-| Nom + Prénom combinés | `DUPONT Jean` (Prénom vide) | Signalé |
-| Société + Contact | Ordre postal recommandé | Signalé |
-| Adresse complète dans un champ | CP détecté dans Adresse1 | Signalé |
-| Contact sans adresse | Nom renseigné mais Adresse1 et CP vides | Signalé |
-
----
-
-## Conformité La Poste NF Z 10-011
-
-Options disponibles dans l'interface :
-
-| Option | Par défaut | Description |
-|---|---|---|
-| BP / CS / TSA | ✅ | `B.P.123` → `BP 123` |
-| Ponctuation parasite | ✅ | Virgules, parenthèses dans les adresses |
-| Vérifier la complétude | ✅ | Identité + Adresse1 + CP + Ville obligatoires |
-| À L'ATTENTION DE (B2B) | ⬜ | Société + Contact → mention réglementaire en Adresse2 |
-| Abréviations RNVP | ⬜ | AVENUE→AV, BOULEVARD→BD, IMPASSE→IMP… |
-| Désaccentuation OCR | ⬜ | É→E, À→A, Ç→C (active aussi avec abréviations) |
-
----
-
-## Gestion des travaux (save/load)
-
-Format JSON sauvegardé :
+## Configuration MCP (.claude/mcp_config.json)
 ```json
 {
-  "version": "1.1",
-  "nom": "Client XYZ — Campagne Mai 2026",
-  "date": "03/04/2026 14:30",
-  "notes": "En attente validation BP...",
-  "mapping": {"Colonne source": "ChampStandard"},
-  "options": {"espaces": true, "civilite": true, ...},
-  "laposte": {"bp_cs": true, "completude": true, ...}
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/chemin/vers/normadress"]
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}" }
+    }
+  }
 }
 ```
 
-Au rechargement : pré-remplit le tableau de mapping + toutes les options.
-Priorité : travail chargé > détection automatique.
-
 ---
 
-## Exigences de qualité
+## Ordre de développement recommandé
 
-- Couverture tests : **≥ 90%** sur le package `cleaner/` (actuellement ~95%)
-- 228 tests passent (pytest)
-- Aucune exception non gérée → toujours `st.error()` avec message clair
-- Fichiers multi-feuilles → `st.selectbox` pour choisir la feuille
-- CSV → détection automatique du séparateur via `chardet`
-- Taille max recommandée : 50 000 lignes → `st.warning` au-delà
-- Ne **jamais** modifier le fichier source — copie en mémoire uniquement
-
----
-
-## Commandes de développement
-
-```bash
-# Installation
-pip install -r requirements.txt
-
-# Lancement local
-streamlit run app.py
-
-# Tests
-pytest tests/ -v --cov=cleaner --cov-report=term-missing
-pytest tests/ --cov=cleaner --cov-fail-under=90
-
-# Régénérer les fixtures de test
-python tests/create_fixtures.py
-
-# Régénérer le favicon depuis favicon.svg
-python -c "
-from svglib.svglib import svg2rlg
-from reportlab.graphics import renderPM
-from PIL import Image
-import io
-drawing = svg2rlg('favicon.svg')
-scale = 128 / max(drawing.width, drawing.height)
-drawing.width *= scale; drawing.height *= scale
-drawing.transform = (scale, 0, 0, scale, 0, 0)
-buf = io.BytesIO()
-renderPM.drawToFile(drawing, buf, fmt='PNG')
-buf.seek(0)
-img = Image.open(buf).convert('RGBA')
-data = img.getdata()
-new_data = [(255,255,255,0) if r>240 and g>240 and b>240 else (r,g,b,a) for r,g,b,a in data]
-img.putdata(new_data)
-img.save('favicon.png')
-"
-
-# Déploiement
-git add .
-git commit -m "feat: description"
-git push origin main
-# → Render redéploie automatiquement
+```
+1.  db.py              → connexion Supabase + CRUD de base + tests
+2.  cleaner.py         → toutes les règles de nettoyage + tests (dont CP flottant)
+3.  detector.py        → détection pro/part + mode BAL + tests
+4.  composer.py        → 6 lignes AFNOR + Formule (tous modes) + tests
+5.  validator.py       → alertes qualité + tests
+6.  mapper.py          → mapping + synonymes + jointure fichiers + tests
+7.  pages/01 + app.py  → tableau de bord + création dossier
+8.  pages/02           → mapping drag & drop
+9.  pages/03           → détection + révision
+10. pages/04           → composition + édition
+11. pdf_generator.py   → PDF BAT
+12. pages/05           → BAT + workflow validation
+13. word_injector.py   → injection champs fusion Word
+14. exporter.py        → export Excel formaté
+15. pages/06           → export final
+16. render.yaml + push → déploiement
 ```
 
 ---
 
 ## Ce qu'il ne faut PAS faire
-
+- Ne pas mélanger logique métier et pages Streamlit — tout dans `core/`
+- Ne pas découper automatiquement les champs `identite_1` (NOM Prénom concaténé) — laisser tel quel
+- Ne pas supprimer automatiquement les doublons ni corriger le type sans validation opérateur
+- Ne pas rendre bloquantes les alertes BAL interne — informatif seulement
+- Ne pas exporter le CP en nombre dans Excel — toujours en TEXT (format `@`)
+- Ne pas hardcoder les credentials Supabase — variables d'environnement uniquement
+- Ne pas utiliser xlrd pour .xlsx — openpyxl uniquement
 - Ne pas utiliser Flask, FastAPI ou Vercel — Streamlit + Render uniquement
-- Ne pas supprimer automatiquement les doublons — signaler seulement
-- Ne pas modifier les fichiers sources — copie en mémoire uniquement
-- Ne pas utiliser xlrd pour les .xlsx (déprécié) — openpyxl uniquement
-- Ne pas hardcoder les chemins de fichiers
-- Ne pas ajouter de base de données — application stateless
-- Ne pas fixer les versions de dépendances avec `==` (utiliser `>=` pour compatibilité Render)
-- Ne pas supprimer le favicon.svg ni le logo.svg — ils sont la source des assets visuels
+- Ne pas ajouter d'authentification en v1 — hors périmètre
