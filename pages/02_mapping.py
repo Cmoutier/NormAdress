@@ -126,6 +126,24 @@ with st.expander("ℹ️ Structure d'une enveloppe AFNOR"):
             language=None,
         )
 
+    st.markdown("**Champs à mapper :**")
+    st.markdown("""
+| Champ | Ligne AFNOR | Rôle |
+|-------|-------------|------|
+| `civilite_1` / `nom_1` / `prenom_1` | L1 | Identité du destinataire (particulier) |
+| `identite_1` | L1 | Identité complète dans une seule colonne |
+| `societe` | L1 | Raison sociale (professionnel) |
+| `civilite_2` / `nom_2` / `prenom_2` | L2 | 2ᵉ contact (professionnel) |
+| `identite_2` | L2 | 2ᵉ contact complet dans une colonne |
+| `adresse_comp_int` | L3 | Bâtiment, résidence, étage, appartement |
+| `adresse_voie` | **L4** ← obligatoire | Numéro + libellé de la voie |
+| `adresse_comp_ext` / `adresse_lieu_dit` | L5 | BP, CS, TSA, lieu-dit |
+| `code_postal` + `ville` | **L6** ← obligatoire | CP 5 chiffres + commune |
+| `pays` | L6 (si étranger) | Ajouté après la ville pour les adresses étrangères |
+| `formule_source` | Formule | Salutation déjà rédigée dans le fichier source |
+| `id_client` | — | Référence client conservée dans l'export |
+""")
+
 
 mapping_result: dict[str, str] = {}
 nb_cols = 3

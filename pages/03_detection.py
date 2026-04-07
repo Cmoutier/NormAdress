@@ -127,7 +127,7 @@ else:
 
     # Navigation pages
     if nb_pages > 1:
-        cp1, cp2, cp3, cp4 = st.columns([1, 2, 2, 1])
+        cp1, cp2, cp3, cp4, _pad = st.columns([1, 2, 1, 1, 3])
         with cp1:
             if st.button("← Préc.", disabled=(page == 0)):
                 st.session_state["page_detection"] = page - 1
@@ -136,7 +136,7 @@ else:
             st.caption(f"Page {page + 1} / {nb_pages}")
         with cp3:
             saisie = st.number_input(
-                "Aller à la page", min_value=1, max_value=nb_pages,
+                "Page", min_value=1, max_value=nb_pages,
                 value=page + 1, step=1, key="goto_detection",
                 label_visibility="collapsed",
             )

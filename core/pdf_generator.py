@@ -118,7 +118,7 @@ def generer_pdf_bat(adresses: list[dict], nom_dossier: str) -> bytes:
         while len(groupe) < 4:
             groupe.append({})
 
-        blocs = [_bloc_adresse(a, style, style_num) if a else [""] for a in groupe]
+        blocs = [_bloc_adresse(a, style, style_num) if a else [Paragraph("", style)] for a in groupe]
 
         data = [
             [blocs[0], blocs[1]],

@@ -131,11 +131,11 @@ if _codes_bloquant or _codes_avertiss:
             w = csv.writer(buf, delimiter=";")
             w.writerow(["#", "L1", "L2", "L3", "L4", "L5", "L6", "Formule", "Alertes"])
             for idx, a in liste_adresses:
-                codes = ", ".join(al["code"] for al in a.get("alertes", []))
+                details = " | ".join(al["message"] for al in a.get("alertes", []))
                 w.writerow([idx + 1,
                              a.get("L1",""), a.get("L2",""), a.get("L3",""),
                              a.get("L4",""), a.get("L5",""), a.get("L6",""),
-                             a.get("Formule",""), codes])
+                             a.get("Formule",""), details])
             return buf.getvalue().encode("utf-8-sig")
 
         exp1, exp2 = st.columns(2)
