@@ -85,12 +85,12 @@ CREATE TABLE adresses (
   formule VARCHAR(200),
   -- ex: "Cher Monsieur Jean DUPONT," ou "Chers Messieurs LERBS et GIRARDIN,"
   -- 6 lignes AFNOR
-  l1 VARCHAR(38),
-  l2 VARCHAR(38),
-  l3 VARCHAR(38),
-  l4 VARCHAR(38),
-  l5 VARCHAR(38),
-  l6 VARCHAR(38),
+  l1 VARCHAR(200),
+  l2 VARCHAR(200),
+  l3 VARCHAR(200),
+  l4 VARCHAR(200),
+  l5 VARCHAR(200),
+  l6 VARCHAR(200),
   -- Alertes qualité
   alertes JSONB DEFAULT '[]',
   -- ex: [{"code":"LONGUEUR","ligne":"L1","valeur":42,"bloquant":false}]
@@ -658,6 +658,8 @@ python-dotenv==1.0.1
 
 ```
 ✅  core/db.py              Connexion Supabase + CRUD dossiers/adresses/mappings
+                            L1-L6 sauvegardées sans troncature (colonnes VARCHAR(200)
+                            après migration Supabase — l'alerte LONGUEUR reste non bloquante)
 ✅  core/cleaner.py         Nettoyage complet — whitespace, civilités, noms, CP, ville
                             PARTICULES = {de, du, des, la, le, les, d} — fix "de la Tour"
 ✅  core/detector.py        Détection pro/part + mode BAL interne
@@ -668,23 +670,29 @@ python-dotenv==1.0.1
                             et non français — pas de heuristique sur le nombre de mots en L6
 ✅  core/mapper.py          Mapping synonymes + auto_map + construire_df_mappe
 ✅  core/pdf_generator.py   PDF BAT grille 2×2, lignes longues surlignées orange
+                            Fix : cellules vides → Paragraph("") (évite crash wrapOn)
 ✅  core/word_injector.py   Injection MERGEFIELD Word (marqueurs {{Ln}} ou fin de doc)
 ✅  app.py                  Tableau de bord + navigation conditionnelle st.navigation()
                             + bouton Dupliquer + bouton Fermer le dossier
 ✅  pages/01_nouveau_dossier.py  Création dossier + pré-remplissage si duplication
 ✅  pages/02_mapping.py     Mapping colonnes + détection mode BAL auto
-                            + expander aide "À quoi correspondent les champs AFNOR ?"
-                            avec tableau L1-L6 et description de chaque champ
+                            + expander : exemples enveloppe particulier/pro côte à côte
+                              + tableau champs → ligne AFNOR → rôle
 ✅  pages/03_detection.py   Révision pro/part ligne par ligne
                             + pagination 50 lignes par page
                             + filtre radio pré-sélectionné sur "inconnu" si existants
+                            + saisie directe du numéro de page
 ✅  pages/04_composition.py Composition AFNOR + édition manuelle + sauvegarde en base
                             + filtres cliquables 🔴 Bloquantes / ⚠️ Avertissements / ✅ OK
                             + pagination 50 lignes par page
                             + revalidation après correction manuelle
+                            + expander détail alertes : compteur par code d'erreur
+                            + exports CSV bloquants et avertissements (message complet)
 ✅  pages/05_bat.py         Génération PDF + workflow validation client
 ✅  pages/06_export.py      Export Excel coloré + Word avec champs de fusion
+✅  Toutes pages             Redirect automatique vers accueil si refresh sans dossier actif
 ✅  Tables Supabase         Créées (dossiers, adresses, mappings)
+                            Migration : adresses.l1-l6 passées de VARCHAR(38) à VARCHAR(200)
 ✅  Render env vars         SUPABASE_URL + SUPABASE_KEY configurés
 ✅  cleaner/ (legacy)       Supprimé
 ✅  tests/test_cleaner.py   28 tests — 100% pass
