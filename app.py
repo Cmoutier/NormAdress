@@ -13,7 +13,7 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 
 def page_tableau_de_bord():
-    from core.db import lister_dossiers, get_dossier
+    from core.db import lister_dossiers
 
     st.title("NormAdress")
     st.caption("Composition d'adresses postales AFNOR — STEP")
@@ -24,7 +24,7 @@ def page_tableau_de_bord():
         st.subheader("Dossiers")
     with col_btn:
         if st.button("+ Nouveau dossier", type="primary", use_container_width=True):
-            st.switch_page("pages/01_nouveau_dossier.py")
+            st.switch_page("nouveau-dossier")
 
     try:
         dossiers = lister_dossiers()
@@ -43,10 +43,10 @@ def page_tableau_de_bord():
         "exporte":   "✅ Exporté",
     }
     STATUT_PAGE = {
-        "en_cours":  "pages/02_mapping.py",
-        "a_valider": "pages/05_bat.py",
-        "valide":    "pages/06_export.py",
-        "exporte":   "pages/06_export.py",
+        "en_cours":  "mapping",
+        "a_valider": "bat",
+        "valide":    "export",
+        "exporte":   "export",
     }
 
     for d in dossiers:
@@ -74,8 +74,7 @@ def page_tableau_de_bord():
                     st.session_state["df_mappe"] = None
                     st.session_state["mapping"] = None
                     st.session_state["adresses"] = None
-                    page = STATUT_PAGE.get(d["statut"], "pages/02_mapping.py")
-                    st.switch_page(page)
+                    st.switch_page(STATUT_PAGE.get(d["statut"], "mapping"))
 
 
 # ---------------------------------------------------------------------------
@@ -85,19 +84,21 @@ def page_tableau_de_bord():
 dossier_id = st.session_state.get("dossier_id")
 
 pages_accueil = [
-    st.Page(page_tableau_de_bord, title="Tableau de bord", icon="🏠", default=True),
-    st.Page("pages/01_nouveau_dossier.py", title="Nouveau dossier", icon="📁"),
+    st.Page(page_tableau_de_bord, title="Tableau de bord",
+            icon="🏠", default=True, url_path="accueil"),
+    st.Page("pages/01_nouveau_dossier.py", title="Nouveau dossier",
+            icon="📁", url_path="nouveau-dossier"),
 ]
 
 nav = {"": pages_accueil}
 
 if dossier_id:
     nav["Dossier en cours"] = [
-        st.Page("pages/02_mapping.py",    title="Mapping des colonnes",  icon="🔗"),
-        st.Page("pages/03_detection.py",  title="Détection pro / part.", icon="🔍"),
-        st.Page("pages/04_composition.py", title="Composition AFNOR",    icon="✉️"),
-        st.Page("pages/05_bat.py",        title="BAT — Validation",      icon="📄"),
-        st.Page("pages/06_export.py",     title="Export final",          icon="📤"),
+        st.Page("pages/02_mapping.py",     title="Mapping des colonnes",  icon="🔗", url_path="mapping"),
+        st.Page("pages/03_detection.py",   title="Détection pro / part.", icon="🔍", url_path="detection"),
+        st.Page("pages/04_composition.py", title="Composition AFNOR",     icon="✉️", url_path="composition"),
+        st.Page("pages/05_bat.py",         title="BAT — Validation",      icon="📄", url_path="bat"),
+        st.Page("pages/06_export.py",      title="Export final",          icon="📤", url_path="export"),
     ]
 
 pg = st.navigation(nav)

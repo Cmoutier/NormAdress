@@ -88,7 +88,7 @@ if submitted:
         st.session_state["parametres"] = parametres
 
         st.success(f"Dossier **{nom}** créé.")
-        st.switch_page("pages/02_mapping.py")
+        st.switch_page("mapping")
 
     except Exception as e:
         st.error(f"Erreur lors de la création du dossier : {e}")

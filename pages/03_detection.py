@@ -23,7 +23,7 @@ mapping = st.session_state.get("mapping") or charger_mapping(dossier_id)
 if df_source is None or not mapping:
     st.error("Données manquantes. Reprenez depuis l'étape Mapping.")
     if st.button("Retour Mapping"):
-        st.switch_page("pages/02_mapping.py")
+        st.switch_page("mapping")
     st.stop()
 
 st.markdown(f"**Dossier :** {dossier['nom']}")
@@ -111,4 +111,4 @@ for idx in df_affich.index:
 st.markdown("---")
 if st.button("Valider la détection →", type="primary"):
     st.session_state["df_mappe"] = st.session_state["df_mappe"]
-    st.switch_page("pages/04_composition.py")
+    st.switch_page("composition")
