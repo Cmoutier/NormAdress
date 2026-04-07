@@ -652,7 +652,7 @@ python-dotenv==1.0.1
 
 ---
 
-## État du développement (07/04/2026)
+## État du développement (07/04/2026 — mis à jour)
 
 ### Terminé ✅
 
@@ -665,37 +665,53 @@ python-dotenv==1.0.1
 ✅  core/mapper.py          Mapping synonymes + auto_map + construire_df_mappe
 ✅  core/pdf_generator.py   PDF BAT grille 2×2, lignes longues surlignées orange
 ✅  core/word_injector.py   Injection MERGEFIELD Word (marqueurs {{Ln}} ou fin de doc)
-✅  app.py                  Tableau de bord dossiers avec statuts colorés
-✅  pages/01_nouveau_dossier.py  Création dossier + upload Excel/Word + paramètres
+✅  app.py                  Tableau de bord + navigation conditionnelle st.navigation()
+                            + bouton Dupliquer + bouton Fermer le dossier
+✅  pages/01_nouveau_dossier.py  Création dossier + pré-remplissage si duplication
 ✅  pages/02_mapping.py     Mapping colonnes + détection mode BAL auto
 ✅  pages/03_detection.py   Révision pro/part ligne par ligne
 ✅  pages/04_composition.py Composition AFNOR + édition manuelle + sauvegarde en base
 ✅  pages/05_bat.py         Génération PDF + workflow validation client
 ✅  pages/06_export.py      Export Excel coloré + Word avec champs de fusion
-✅  tests/test_cleaner.py   18 tests — 100% pass
-✅  tests/test_detector.py  8 tests — 100% pass
+✅  Tables Supabase         Créées (dossiers, adresses, mappings)
+✅  Render env vars         SUPABASE_URL + SUPABASE_KEY configurés
+✅  cleaner/ (legacy)       Supprimé
+✅  tests/test_cleaner.py   28 tests — 100% pass
+✅  tests/test_detector.py   8 tests — 100% pass
 ✅  tests/test_composer.py  12 tests — 100% pass
-✅  tests/test_validator.py 6 tests — 100% pass
-                            → Total : 58 tests, 0 échec
+✅  tests/test_validator.py  9 tests — 100% pass
+✅  tests/test_mapper.py    12 tests — 100% pass
+                            → Total : 80 tests, 0 échec, couverture 94%
+✅  .coveragerc             Exclut db/pdf_generator/word_injector
+✅  .github/workflows/ci.yml CI corrigé : cov=core, seuil 85%, Node.js 24
 ```
 
 ### À faire / Prochaines étapes
 
 ```
-⏳  Tables Supabase         À créer manuellement via SQL Editor (SQL dans section dédiée)
-⏳  Render env vars         SUPABASE_URL + SUPABASE_KEY à configurer dans Render
-⏳  cleaner/ (legacy)       Ancien package v3 — toujours présent, peut être supprimé
-⏳  tests/fixtures          Fixtures réelles présentes mais non versionnées (.gitignore)
+⏳  tests/fixtures          Fixtures réelles présentes mais non versionnées
 ⏳  Drag & drop mapping     streamlit-sortables pas encore intégré dans pages/02
 ```
 
+### Notes navigation Streamlit (important)
+
+La version Streamlit sur Render (Python 3.14) a des contraintes strictes :
+- `st.switch_page()` n'accepte **que** des chemins de fichiers `pages/*.py`
+- `st.switch_page(st.Page_object)` → CRASH
+- `st.switch_page("url_path_slug")` → CRASH
+- Les constantes `PAGE_*` dans `app.py` centralisent tous les chemins
+- `st.navigation()` est utilisé pour le menu conditionnel (supprime l'auto-nav)
+- La redirection post-`dossier_id` utilise le pattern `target_page` en session :
+  1. Bouton → `session["dossier_id"] = id` + `session["target_page"] = statut` + `rerun()`
+  2. `app.py` reconstruit la nav avec le dossier → `switch_page(STATUT_PAGE[statut])`
+
 ### Notes environnement local
 
-**Python 3.14 + Windows** : `supabase>=2.28` tire `storage3` qui tire `pyiceberg`,
-lequel nécessite Visual Studio Build Tools. L'app tourne sans problème sur Render
-(Python 3.11, Linux). Pour tester localement sans supabase, lancer uniquement :
+**Python 3.14 + Windows** : `supabase>=2.28` tire `storage3` → `pyiceberg`,
+qui nécessite Visual Studio Build Tools. L'app tourne sans problème sur Render.
+Pour tester localement (sans supabase) :
 ```bash
-pytest tests/test_cleaner.py tests/test_detector.py tests/test_composer.py tests/test_validator.py
+pytest tests/ -v --cov=core --cov-fail-under=85
 ```
 
 ---
