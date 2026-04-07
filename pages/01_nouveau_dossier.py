@@ -132,8 +132,8 @@ if submitted:
             st.session_state["fichier_word_nom"] = fichier_word.name
         st.session_state["parametres"] = parametres
 
-        st.success(f"Dossier **{nom}** créé.")
-        st.switch_page("mapping")
+        st.session_state["target_page"] = "mapping"
+        st.rerun()
 
     except Exception as e:
         st.error(f"Erreur lors de la création du dossier : {e}")

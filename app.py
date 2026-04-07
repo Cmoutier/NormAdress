@@ -90,20 +90,23 @@ def page_tableau_de_bord():
             with c4:
                 if st.button("Reprendre", key=f"open_{d['id']}",
                              use_container_width=True):
-                    st.session_state["dossier_id"] = d["id"]
                     for k in ("df_source", "df_mappe", "mapping", "adresses",
                               "fichier_excel", "fichier_word"):
                         st.session_state.pop(k, None)
-                    st.switch_page(STATUT_PAGE.get(d["statut"], "mapping"))
+                    st.session_state["dossier_id"] = d["id"]
+                    st.session_state["target_page"] = STATUT_PAGE.get(
+                        d["statut"], "mapping"
+                    )
+                    st.rerun()
             with c5:
                 if st.button("Dupliquer", key=f"dup_{d['id']}",
                              use_container_width=True):
-                    st.session_state["duplication_source_id"] = d["id"]
-                    # Fermer le dossier actif si différent
                     for k in ("dossier_id", "df_source", "df_mappe", "mapping",
                               "adresses", "fichier_excel", "fichier_word"):
                         st.session_state.pop(k, None)
-                    st.switch_page("nouveau-dossier")
+                    st.session_state["duplication_source_id"] = d["id"]
+                    st.session_state["target_page"] = "nouveau-dossier"
+                    st.rerun()
 
 
 # ---------------------------------------------------------------------------
@@ -131,4 +134,11 @@ if dossier_id:
     ]
 
 pg = st.navigation(nav)
+
+# Redirection différée : exécutée APRÈS que la navigation est construite,
+# donc les pages dossier sont déjà enregistrées quand on switch.
+_target = st.session_state.pop("target_page", None)
+if _target:
+    st.switch_page(_target)
+
 pg.run()
