@@ -103,45 +103,31 @@ st.caption("Vérifiez et ajustez le mapping détecté automatiquement.")
 
 with st.expander("ℹ️ Structure d'une enveloppe AFNOR"):
     col_part, col_pro = st.columns(2)
-    with col_part:
-        st.markdown("**Particulier**")
-        st.code(
-            "L1  M. Jean DUPONT\n"
-            "L2  Appartement 12\n"
-            "L3  Résidence Les Pins\n"
-            "L4  12 RUE DE LA PAIX      ← obligatoire\n"
-            "L5  BP 123\n"
-            "L6  75001 PARIS            ← obligatoire",
-            language=None,
-        )
-    with col_pro:
-        st.markdown("**Professionnel**")
-        st.code(
-            "L1  ACME SARL\n"
-            "L2  M. Jean DUPONT\n"
-            "L3  Bât. B\n"
-            "L4  12 RUE DE LA PAIX      ← obligatoire\n"
-            "L5  CS 12345\n"
-            "L6  75001 PARIS            ← obligatoire",
-            language=None,
-        )
 
-    st.markdown("**Champs à mapper :**")
-    st.markdown("""
-| Champ | Ligne AFNOR | Rôle |
-|-------|-------------|------|
-| `civilite_1` / `nom_1` / `prenom_1` | L1 | Identité du destinataire (particulier) |
-| `identite_1` | L1 | Identité complète dans une seule colonne |
-| `societe` | L1 | Raison sociale (professionnel) |
-| `civilite_2` / `nom_2` / `prenom_2` | L2 | 2ᵉ contact (professionnel) |
-| `identite_2` | L2 | 2ᵉ contact complet dans une colonne |
-| `adresse_comp_int` | L3 | Bâtiment, résidence, étage, appartement |
-| `adresse_voie` | **L4** ← obligatoire | Numéro + libellé de la voie |
-| `adresse_comp_ext` / `adresse_lieu_dit` | L5 | BP, CS, TSA, lieu-dit |
-| `code_postal` + `ville` | **L6** ← obligatoire | CP 5 chiffres + commune |
-| `pays` | L6 (si étranger) | Ajouté après la ville pour les adresses étrangères |
-| `formule_source` | Formule | Salutation déjà rédigée dans le fichier source |
-| `id_client` | — | Référence client conservée dans l'export |
+    with col_part:
+        st.markdown("#### Pour un particulier")
+        st.markdown("""
+| Ligne | Détails de l'information | Exemple |
+|-------|--------------------------|---------|
+| **L1** | Identité du destinataire — civilité + prénom + nom *(obligatoire)* | M. Jean DUPONT |
+| L2 | Complément d'identité intérieur (appartement, étage…) | Appartement 12 |
+| L3 | Complément d'identité extérieur (bâtiment, résidence…) | Résidence Les Pins |
+| **L4** | Numéro et libellé de la voie *(obligatoire)* | 12 RUE DE LA PAIX |
+| L5 | Lieu-dit ou boîte postale (BP, CS, TSA…) | BP 123 |
+| **L6** | Code postal + commune *(obligatoire)* | 75001 PARIS |
+""")
+
+    with col_pro:
+        st.markdown("#### Pour une entreprise")
+        st.markdown("""
+| Ligne | Détails de l'information | Exemple |
+|-------|--------------------------|---------|
+| **L1** | Raison sociale / Structure *(obligatoire)* | ACME SARL |
+| L2 | Identité du destinataire — civilité + prénom + nom | M. Jean DUPONT |
+| L3 | Complément d'identité extérieur (bâtiment, résidence…) | Bât. B |
+| **L4** | Numéro et libellé de la voie *(obligatoire)* | 12 RUE DE LA PAIX |
+| L5 | Lieu-dit ou boîte postale (BP, CS, TSA…) | CS 12345 |
+| **L6** | Code postal + commune *(obligatoire)* | 75001 PARIS |
 """)
 
 
