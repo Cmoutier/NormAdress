@@ -69,20 +69,42 @@ nb_avertiss    = sum(1 for a in adresses
                      if a.get("alertes") and not a_alerte_bloquante(a["alertes"]))
 nb_ok          = nb_total - nb_bloquant - nb_avertiss
 
-# Compteur par code d'alerte
+# Compteur par code d'alerte + listes filtrées (calculés une seule fois)
 from collections import Counter
+import io as _io
+import csv as _csv
+
+_liste_bloquants  = [(i, a) for i, a in enumerate(adresses)
+                     if a_alerte_bloquante(a.get("alertes", []))]
+_liste_avertiss   = [(i, a) for i, a in enumerate(adresses)
+                     if a.get("alertes") and not a_alerte_bloquante(a["alertes"])]
+
 _codes_bloquant = Counter(
-    al["code"]
-    for a in adresses
-    for al in a.get("alertes", [])
-    if al["bloquant"]
+    al["code"] for _, a in _liste_bloquants for al in a.get("alertes", []) if al["bloquant"]
 )
 _codes_avertiss = Counter(
-    al["code"]
-    for a in adresses
-    for al in a.get("alertes", [])
-    if not al["bloquant"]
+    al["code"] for _, a in _liste_avertiss for al in a.get("alertes", []) if not al["bloquant"]
 )
+
+def _to_csv(liste_adresses: list[tuple]) -> bytes:
+    buf = _io.StringIO()
+    w = _csv.writer(buf, delimiter=";")
+    w.writerow(["#", "L1", "L2", "L3", "L4", "L5", "L6", "Formule", "Alertes"])
+    for idx, a in liste_adresses:
+        details = " | ".join(al["message"] for al in a.get("alertes", []))
+        w.writerow([idx + 1,
+                    a.get("L1",""), a.get("L2",""), a.get("L3",""),
+                    a.get("L4",""), a.get("L5",""), a.get("L6",""),
+                    a.get("Formule",""), details])
+    return buf.getvalue().encode("utf-8-sig")
+
+# Pré-calcul CSV (une seule fois, stocké en session pour éviter recalcul)
+_csv_key_b = f"csv_bloquants_{dossier_id}"
+_csv_key_a = f"csv_avertiss_{dossier_id}"
+if _csv_key_b not in st.session_state:
+    st.session_state[_csv_key_b] = _to_csv(_liste_bloquants)
+if _csv_key_a not in st.session_state:
+    st.session_state[_csv_key_a] = _to_csv(_liste_avertiss)
 
 # Filtre actif en session
 if "filtre_compo" not in st.session_state:
@@ -110,57 +132,41 @@ with c4:
         st.session_state["filtre_compo"] = "tous"
         st.rerun()
 
-# Détail par code d'alerte + exports CSV
+# Détail par code + boutons export (hors expander pour éviter le bug .htm)
 if _codes_bloquant or _codes_avertiss:
-    with st.expander("📊 Détail des alertes + exports"):
+    with st.expander("📊 Détail des alertes par type"):
         det1, det2 = st.columns(2)
         with det1:
             if _codes_bloquant:
-                st.markdown("**🔴 Erreurs bloquantes par type**")
+                st.markdown("**🔴 Erreurs bloquantes**")
                 for code, n in sorted(_codes_bloquant.items()):
                     st.markdown(f"- `{code}` : **{n}**")
         with det2:
             if _codes_avertiss:
-                st.markdown("**⚠️ Avertissements par type**")
+                st.markdown("**⚠️ Avertissements**")
                 for code, n in sorted(_codes_avertiss.items()):
                     st.markdown(f"- `{code}` : **{n}**")
 
-        def _to_csv(liste_adresses: list[dict]) -> bytes:
-            import io, csv
-            buf = io.StringIO()
-            w = csv.writer(buf, delimiter=";")
-            w.writerow(["#", "L1", "L2", "L3", "L4", "L5", "L6", "Formule", "Alertes"])
-            for idx, a in liste_adresses:
-                details = " | ".join(al["message"] for al in a.get("alertes", []))
-                w.writerow([idx + 1,
-                             a.get("L1",""), a.get("L2",""), a.get("L3",""),
-                             a.get("L4",""), a.get("L5",""), a.get("L6",""),
-                             a.get("Formule",""), details])
-            return buf.getvalue().encode("utf-8-sig")
-
-        exp1, exp2 = st.columns(2)
-        with exp1:
-            if nb_bloquant:
-                bloquants = [(i, a) for i, a in enumerate(adresses)
-                             if a_alerte_bloquante(a.get("alertes", []))]
-                st.download_button(
-                    "⬇️ Export erreurs bloquantes (.csv)",
-                    data=_to_csv(bloquants),
-                    file_name="erreurs_bloquantes.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                )
-        with exp2:
-            if nb_avertiss:
-                avertiss = [(i, a) for i, a in enumerate(adresses)
-                            if a.get("alertes") and not a_alerte_bloquante(a["alertes"])]
-                st.download_button(
-                    "⬇️ Export avertissements (.csv)",
-                    data=_to_csv(avertiss),
-                    file_name="avertissements.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                )
+    # Boutons export hors expander
+    exp1, exp2, _ = st.columns([2, 2, 3])
+    with exp1:
+        if nb_bloquant:
+            st.download_button(
+                "⬇️ Erreurs bloquantes (.csv)",
+                data=st.session_state[_csv_key_b],
+                file_name="erreurs_bloquantes.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+    with exp2:
+        if nb_avertiss:
+            st.download_button(
+                "⬇️ Avertissements (.csv)",
+                data=st.session_state[_csv_key_a],
+                file_name="avertissements.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
 
 # ---------------------------------------------------------------------------
 # Filtrage + pagination
