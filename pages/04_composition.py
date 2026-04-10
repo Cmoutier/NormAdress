@@ -12,6 +12,7 @@ st.caption("Étape 4 / 6")
 dossier_id = st.session_state.get("dossier_id")
 if not dossier_id:
     st.switch_page("app.py")
+    st.stop()
 
 dossier = get_dossier(dossier_id)
 df: pd.DataFrame = st.session_state.get("df_mappe")

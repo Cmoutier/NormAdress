@@ -13,6 +13,7 @@ st.caption("Étape 3 / 6")
 dossier_id = st.session_state.get("dossier_id")
 if not dossier_id:
     st.switch_page("app.py")
+    st.stop()
 
 dossier = get_dossier(dossier_id)
 df_source = st.session_state.get("df_source")
