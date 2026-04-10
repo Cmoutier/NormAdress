@@ -2,7 +2,7 @@
 import pandas as pd
 import streamlit as st
 
-from core.db import get_dossier, charger_mapping
+from core.db import get_dossier, charger_mapping, charger_adresses
 from core.mapper import construire_df_mappe
 from core.cleaner import clean_row
 from core.detector import detecter_type
@@ -25,6 +25,22 @@ if df_source is None or not mapping:
     st.stop()
 
 st.markdown(f"**Dossier :** {dossier['nom']}")
+
+# Notice si une composition existe déjà en base
+if "df_mappe" not in st.session_state:
+    _adresses_existantes = charger_adresses(dossier_id)
+    if _adresses_existantes:
+        st.info(
+            f"Ce dossier contient déjà **{len(_adresses_existantes)} adresses composées** en base. "
+            "La détection ci-dessous repart du fichier source — les corrections manuelles "
+            "précédentes seront réappliquées à l'étape Composition."
+        )
+        c_cont, c_refaire, _ = st.columns([2, 2, 3])
+        with c_cont:
+            if st.button("Continuer vers la Composition →", type="primary"):
+                st.switch_page("pages/04_composition.py")
+        with c_refaire:
+            st.button("Refaire la détection", help="Repart du fichier source")
 
 # ---------------------------------------------------------------------------
 # Préparation (une seule fois)

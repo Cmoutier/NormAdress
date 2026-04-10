@@ -50,19 +50,11 @@ with st.form("form_dossier"):
     client = st.text_input("Nom du client", value=def_client,
                            placeholder="ex: SYNERPA")
 
-    col1, col2 = st.columns(2)
-    with col1:
-        fichier_excel = st.file_uploader(
-            "Fichier Excel source *",
-            type=["xlsx", "xls", "csv"],
-            help="Fichier contenant les destinataires",
-        )
-    with col2:
-        fichier_word = st.file_uploader(
-            "Fichier Word client (courrier)",
-            type=["docx"],
-            help="Le courrier à fusionner — optionnel à cette étape",
-        )
+    fichier_excel = st.file_uploader(
+        "Fichier Excel source *",
+        type=["xlsx", "xls", "csv"],
+        help="Fichier contenant les destinataires",
+    )
 
     st.markdown("**Paramètres campagne**")
     col3, col4, col5 = st.columns(3)
@@ -110,7 +102,6 @@ if submitted:
             "pays_defaut":      pays_defaut,
             "entete":           entete_val,
             "fichier_source_nom": fichier_excel.name,
-            "fichier_word_nom":   fichier_word.name if fichier_word else "",
         }
 
         dossier = creer_dossier(nom=nom, client=client, parametres=parametres)
@@ -127,10 +118,7 @@ if submitted:
         st.session_state["fichier_excel_nom"] = fichier_excel.name
         st.session_state["df_source"]         = None
         st.session_state["df_mappe"]          = None
-        if fichier_word:
-            st.session_state["fichier_word"]     = fichier_word.read()
-            st.session_state["fichier_word_nom"] = fichier_word.name
-        st.session_state["parametres"] = parametres
+        st.session_state["parametres"]        = parametres
 
         st.session_state["dossier_id"] = dossier_id
         st.session_state["target_page"] = "en_cours"

@@ -485,28 +485,26 @@ Règles Excel :
 - Les lignes avec alertes non bloquantes sont colorées en orange pâle (#FEF3E6)
 - Largeur des colonnes ajustée automatiquement
 
-#### 6b. Export Word (dans `core/word_injector.py`)
+#### 6b. Tips publipostage Word (affiché en bas de page/06)
 
-Le fichier Word fourni par le client est modifié avec python-docx :
+La génération automatique du Word a été supprimée de l'UI.
+L'opérateur reçoit à la place un encart de conseils :
 
-1. Détecter la zone adresse dans le document (chercher un marqueur ou une zone de texte)
-2. Injecter les champs de fusion Word : `{ MERGEFIELD "L1" }`, `{ MERGEFIELD "Formule" }`, etc.
-3. Configurer la source de données : lier l'Excel exporté comme source de publipostage
-4. Activer l'option "Supprimer les paragraphes vides" (via XML directement)
-
-**Instruction affichée à l'opérateur après téléchargement du Word :**
 ```
-Le fichier Word est prêt. Pour finaliser le publipostage :
-1. Ouvrir le fichier Word téléchargé
-2. Onglet "Publipostage" → "Terminer et fusionner" → "Modifier des documents individuels"
-3. Sélectionner "Tous" → OK
-4. Word génère les N lettres fusionnées dans un nouveau document
-5. Imprimer ou exporter en PDF
+Pour réaliser le publipostage dans Word :
+1. Ouvrir Word → Onglet "Publipostage" → "Démarrer la fusion et le publipostage"
+2. Sélectionner "Lettres"
+3. "Sélection des destinataires" → "Utiliser une liste existante" → choisir l'Excel exporté
+4. Positionner le curseur à l'emplacement de l'adresse dans le courrier
+5. Insérer les champs : L1, L2, L3, L4, L5, L6 (via "Insérer un champ de fusion")
+6. ⚠️ Gérer les lignes vides : après chaque champ Ln optionnel, ajouter une règle
+   "Si... Alors... Sinon..." pour masquer la ligne si le champ est vide
+7. "Terminer et fusionner" → "Modifier des documents individuels" → Tous → OK
 ```
 
 **Après export :**
 - Statut dossier → `exporte` + date enregistrée
-- Les deux fichiers (Excel + Word) restent téléchargeables depuis le tableau de bord
+- L'Excel reste téléchargeable depuis le tableau de bord
 
 ---
 
@@ -652,7 +650,7 @@ python-dotenv==1.0.1
 
 ---
 
-## État du développement (07/04/2026 — mis à jour)
+## État du développement (10/04/2026 — mis à jour)
 
 ### Terminé ✅
 
@@ -676,20 +674,27 @@ python-dotenv==1.0.1
                             + bouton Dupliquer + bouton Fermer le dossier
 ✅  pages/01_nouveau_dossier.py  Création dossier + pré-remplissage si duplication
 ✅  pages/02_mapping.py     Mapping colonnes + détection mode BAL auto
-                            + expander : exemples enveloppe particulier/pro côte à côte
-                              + tableau champs → ligne AFNOR → rôle
+                            + expander : 2 tableaux côte à côte (particulier / entreprise)
+                              Ligne AFNOR | Détails | Exemple
+                            Mapping rechargé depuis DB à chaque reprise (charger_mapping)
 ✅  pages/03_detection.py   Révision pro/part ligne par ligne
                             + pagination 50 lignes par page
                             + filtre radio pré-sélectionné sur "inconnu" si existants
                             + saisie directe du numéro de page
+                            + notice si adresses déjà composées en base (avec option refaire)
 ✅  pages/04_composition.py Composition AFNOR + édition manuelle + sauvegarde en base
                             + filtres cliquables 🔴 Bloquantes / ⚠️ Avertissements / ✅ OK
                             + pagination 50 lignes par page
                             + revalidation après correction manuelle
                             + expander détail alertes : compteur par code d'erreur
                             + exports CSV bloquants et avertissements (message complet)
+                              (boutons hors expander — fix bug .htm Streamlit)
 ✅  pages/05_bat.py         Génération PDF + workflow validation client
-✅  pages/06_export.py      Export Excel coloré + Word avec champs de fusion
+                            + boutons de retour à l'état précédent (recul workflow)
+✅  pages/06_export.py      Export Excel coloré (rouge/orange selon alertes)
+                            Word supprimé — remplacé par Tips publipostage Word
+                            + bouton retour à l'état précédent
+✅  pages/01_nouveau_dossier.py  Création dossier — upload Word supprimé
 ✅  Toutes pages             Redirect automatique vers accueil si refresh sans dossier actif
 ✅  Tables Supabase         Créées (dossiers, adresses, mappings)
                             Migration : adresses.l1-l6 passées de VARCHAR(38) à VARCHAR(200)
@@ -710,6 +715,7 @@ python-dotenv==1.0.1
 ```
 ⏳  tests/fixtures          Fixtures réelles présentes mais non versionnées
 ⏳  Drag & drop mapping     streamlit-sortables pas encore intégré dans pages/02
+⏳  core/word_injector.py   Conservé mais non exposé dans l'UI (supprimé de pages/06)
 ```
 
 ### Notes navigation Streamlit (important)

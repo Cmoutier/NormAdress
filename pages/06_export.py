@@ -99,54 +99,46 @@ if st.button("Générer l'Excel", type="primary"):
     )
 
 # ---------------------------------------------------------------------------
-# Export Word
+# Tips publipostage Word
 # ---------------------------------------------------------------------------
 
-st.markdown("### Export Word (publipostage)")
-
-fichier_word = st.session_state.get("fichier_word")
-if not fichier_word:
-    uploaded_word = st.file_uploader(
-        "Charger le fichier Word client (.docx)",
-        type=["docx"],
-    )
-    if uploaded_word:
-        fichier_word = uploaded_word.read()
-        st.session_state["fichier_word"] = fichier_word
-        st.session_state["fichier_word_nom"] = uploaded_word.name
-
-if fichier_word:
-    if st.button("Injecter les champs de fusion Word"):
-        from core.word_injector import injecter_champs_fusion
-        with st.spinner("Injection des champs de fusion..."):
-            word_modifie = injecter_champs_fusion(fichier_word)
-        nom_word = st.session_state.get("fichier_word_nom", "courrier.docx")
-        nom_out = nom_word.replace(".docx", "_PUBLIPOSTAGE.docx")
-        st.download_button(
-            label=f"Télécharger {nom_out}",
-            data=word_modifie,
-            file_name=nom_out,
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        )
-        st.info(
-            "**Pour finaliser le publipostage :**\n\n"
-            "1. Ouvrir le fichier Word téléchargé\n"
-            "2. Onglet **Publipostage** → **Terminer et fusionner** → **Modifier des documents individuels**\n"
-            "3. Sélectionner **Tous** → OK\n"
-            "4. Word génère les lettres fusionnées dans un nouveau document\n"
-            "5. Imprimer ou exporter en PDF"
-        )
+st.markdown("---")
+st.markdown("### Publipostage Word")
+with st.expander("📋 Comment réaliser le publipostage dans Word"):
+    st.markdown("""
+1. Ouvrir Word → onglet **Publipostage** → **Démarrer la fusion et le publipostage** → **Lettres**
+2. **Sélection des destinataires** → **Utiliser une liste existante** → choisir l'Excel exporté (onglet *Adresses_NormAdress*)
+3. Positionner le curseur à l'emplacement de l'adresse dans le courrier
+4. **Insérer un champ de fusion** pour chaque ligne : `L1`, `L2`, `L3`, `L4`, `L5`, `L6`
+5. ⚠️ **Lignes vides** — pour éviter les lignes blanches quand L2/L3/L5 sont vides :
+   - Sélectionner le champ + son saut de ligne
+   - **Règles** → **Si… Alors… Sinon…** : Si *champ* = **(vide)** → ne rien afficher
+6. Insérer également le champ `Formule` pour la salutation personnalisée
+7. **Terminer et fusionner** → **Modifier des documents individuels** → **Tous** → OK
+8. Word génère un nouveau document avec toutes les lettres — imprimer ou exporter en PDF
+""")
 
 # ---------------------------------------------------------------------------
 # Clôture du dossier
 # ---------------------------------------------------------------------------
 
 st.markdown("---")
-if dossier["statut"] != "exporte":
-    if st.button("Marquer le dossier comme exporté ✅"):
+statut_export = dossier["statut"]
+if statut_export != "exporte":
+    if st.button("Marquer le dossier comme exporté ✅", type="primary"):
         params = dossier.get("parametres") or {}
         params["date_export"] = datetime.now().strftime("%d/%m/%Y %H:%M")
         mettre_a_jour_parametres(dossier_id, params)
         changer_statut(dossier_id, "exporte")
         st.success("Dossier clôturé.")
+        st.rerun()
+
+# Recul d'état
+with st.expander("⚙️ Modifier l'état du dossier"):
+    st.caption("Permet de revenir en arrière si le client demande une modification.")
+    if st.button("↩ Remettre à valider", use_container_width=True):
+        changer_statut(dossier_id, "valide")
+        st.rerun()
+    if st.button("↩ Remettre en cours", use_container_width=True):
+        changer_statut(dossier_id, "en_cours")
         st.rerun()

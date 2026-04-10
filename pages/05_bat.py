@@ -98,3 +98,19 @@ if dossier["statut"] == "valide":
     st.markdown("---")
     if st.button("Passer à l'export →", type="primary"):
         st.switch_page("pages/06_export.py")
+
+# Recul d'état
+st.markdown("---")
+with st.expander("⚙️ Modifier l'état du dossier"):
+    st.caption("Permet de revenir en arrière si le client demande une modification.")
+    recul1, recul2 = st.columns(2)
+    with recul1:
+        if statut != "en_cours":
+            if st.button("↩ Remettre en cours", use_container_width=True):
+                changer_statut(dossier_id, "en_cours")
+                st.rerun()
+    with recul2:
+        if statut in ("valide", "exporte"):
+            if st.button("↩ Remettre à valider", use_container_width=True):
+                changer_statut(dossier_id, "a_valider")
+                st.rerun()
