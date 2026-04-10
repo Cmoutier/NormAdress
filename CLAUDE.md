@@ -650,7 +650,7 @@ python-dotenv==1.0.1
 
 ---
 
-## État du développement (10/04/2026 — mis à jour)
+## État du développement (10/04/2026 — mis à jour, version finale déployée)
 
 ### Terminé ✅
 
@@ -673,29 +673,32 @@ python-dotenv==1.0.1
 ✅  app.py                  Tableau de bord + navigation conditionnelle st.navigation()
                             + bouton Dupliquer + bouton Fermer le dossier
 ✅  pages/01_nouveau_dossier.py  Création dossier + pré-remplissage si duplication
+                            Upload Word supprimé (non nécessaire en étape 1)
 ✅  pages/02_mapping.py     Mapping colonnes + détection mode BAL auto
                             + expander : 2 tableaux côte à côte (particulier / entreprise)
-                              Ligne AFNOR | Détails | Exemple
+                              colonnes : Ligne AFNOR | Détails | Exemple
                             Mapping rechargé depuis DB à chaque reprise (charger_mapping)
 ✅  pages/03_detection.py   Révision pro/part ligne par ligne
                             + pagination 50 lignes par page
                             + filtre radio pré-sélectionné sur "inconnu" si existants
-                            + saisie directe du numéro de page
-                            + notice si adresses déjà composées en base (avec option refaire)
+                            + saisie directe du numéro de page (champ compact)
+                            + notice si adresses déjà composées en base :
+                              bouton "Continuer → Composition" ou "Refaire la détection"
 ✅  pages/04_composition.py Composition AFNOR + édition manuelle + sauvegarde en base
                             + filtres cliquables 🔴 Bloquantes / ⚠️ Avertissements / ✅ OK
                             + pagination 50 lignes par page
                             + revalidation après correction manuelle
-                            + expander détail alertes : compteur par code d'erreur
-                            + exports CSV bloquants et avertissements (message complet)
-                              (boutons hors expander — fix bug .htm Streamlit)
-✅  pages/05_bat.py         Génération PDF + workflow validation client
-                            + boutons de retour à l'état précédent (recul workflow)
-✅  pages/06_export.py      Export Excel coloré (rouge/orange selon alertes)
-                            Word supprimé — remplacé par Tips publipostage Word
-                            + bouton retour à l'état précédent
-✅  pages/01_nouveau_dossier.py  Création dossier — upload Word supprimé
-✅  Toutes pages             Redirect automatique vers accueil si refresh sans dossier actif
+                            + expander "Détail des alertes par type" : compteur par code
+                            + exports CSV bloquants / avertissements hors expander
+                              (message complet dans colonne Alertes — fix bug .htm Streamlit)
+✅  pages/05_bat.py         Génération PDF BAT + workflow validation client
+                            + expander "⚙️ Modifier l'état" : recul vers en_cours / a_valider
+✅  pages/06_export.py      Export Excel coloré (rouge=bloquant, orange=avertissement)
+                            Word supprimé — remplacé par encart Tips publipostage Word
+                            (étapes + gestion lignes vides avec règle Si…Alors…Sinon…)
+                            + expander "⚙️ Modifier l'état" : recul vers valide / en_cours
+✅  Toutes pages             st.switch_page("app.py") + st.stop() si pas de dossier_id
+                            (refresh → retour accueil automatique, sans crash NoneType)
 ✅  Tables Supabase         Créées (dossiers, adresses, mappings)
                             Migration : adresses.l1-l6 passées de VARCHAR(38) à VARCHAR(200)
 ✅  Render env vars         SUPABASE_URL + SUPABASE_KEY configurés
@@ -720,7 +723,7 @@ python-dotenv==1.0.1
 
 ### Notes navigation Streamlit (important)
 
-La version Streamlit sur Render (Python 3.14) a des contraintes strictes :
+La version Streamlit sur Render (Python 3.11) a des contraintes strictes :
 - `st.switch_page()` n'accepte **que** des chemins de fichiers `pages/*.py`
 - `st.switch_page(st.Page_object)` → CRASH
 - `st.switch_page("url_path_slug")` → CRASH
